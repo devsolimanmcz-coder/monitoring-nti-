@@ -55,16 +55,60 @@ test('rejects incomplete or negative pixel positions', async () => {
   await assert.rejects(saveDashboardConfig(configWithWidget({ mapX: -1, mapY: 20 })), /coordenadas em pixels válidas/)
 })
 
+test('persists consumption sections and their monthly chart widgets', async () => {
+  const config = configWithWidget({ range: '30d', sectionId: 'monthly-traffic' })
+  config.dashboards[0].sections = [{
+    id: 'monthly-traffic',
+    title: 'Consumo mensal',
+    kind: 'consumption',
+  }]
+
+  const saved = await saveDashboardConfig(config)
+
+  assert.deepEqual(saved.dashboards[0].sections, config.dashboards[0].sections)
+  assert.equal(saved.dashboards[0].widgets[0].sectionId, 'monthly-traffic')
+  assert.equal(saved.dashboards[0].widgets[0].range, '30d')
+})
+
+test('persists resizable dashboard widgets and host cards', async () => {
+  const config = configWithWidget({ width: 3, height: 5 })
+  config.dashboards[0].cardSizes = {
+    'icmp:ROUTER01': { width: 2, height: 3 },
+    'servers:SERVER01': { width: 4, height: 6 },
+    'invalid-card': { width: 8, height: 2 },
+  }
+  const saved = await saveDashboardConfig(config)
+
+  assert.equal(saved.dashboards[0].widgets[0].width, 3)
+  assert.equal(saved.dashboards[0].widgets[0].height, 5)
+  assert.deepEqual(saved.dashboards[0].cardSizes, {
+    'icmp:ROUTER01': { width: 2, height: 3 },
+    'servers:SERVER01': { width: 4, height: 6 },
+  })
+})
+
+test('rejects widgets assigned to non-consumption sections', async () => {
+  const config = configWithWidget({ sectionId: 'network' })
+  config.dashboards[0].sections = [{ id: 'network', title: 'Rede', kind: 'icmp' }]
+
+  await assert.rejects(
+    saveDashboardConfig(config),
+    /Indicadores só podem ser associados a seções de consumo válidas/,
+  )
+})
+
 test('starts connectivity without sections and persists manually configured sections', async () => {
   const config = structuredClone(DEFAULT_DASHBOARD_CONFIG)
   assert.deepEqual(config.connectivityLayout.sections, [])
 
   config.connectivityLayout.sections = [{ id: 'links-core', title: 'Links principais', kind: 'icmp' }]
   config.connectivityLayout.assignments = { ROUTER: 'links-core', UNKNOWN: 'not-a-section' }
+  config.connectivityLayout.cardSizes = { 'icmp:ROUTER': { width: 2, height: 3 } }
   const saved = await saveDashboardConfig(config)
 
   assert.deepEqual(saved.connectivityLayout.sections, [{ id: 'links-core', title: 'Links principais', kind: 'icmp' }])
   assert.deepEqual(saved.connectivityLayout.assignments, { ROUTER: 'links-core' })
+  assert.deepEqual(saved.connectivityLayout.cardSizes, { 'icmp:ROUTER': { width: 2, height: 3 } })
 })
 
 test('starts servers without sections and persists manually configured sections', async () => {
@@ -73,8 +117,10 @@ test('starts servers without sections and persists manually configured sections'
 
   config.serverLayout.sections = [{ id: 'database-servers', title: 'Servidores de banco', kind: 'servers' }]
   config.serverLayout.assignments = { SERVER01: 'database-servers' }
+  config.serverLayout.cardSizes = { 'servers:SERVER01': { width: 3, height: 5 } }
   const saved = await saveDashboardConfig(config)
 
   assert.deepEqual(saved.serverLayout.sections, [{ id: 'database-servers', title: 'Servidores de banco', kind: 'servers' }])
   assert.deepEqual(saved.serverLayout.assignments, { SERVER01: 'database-servers' })
+  assert.deepEqual(saved.serverLayout.cardSizes, { 'servers:SERVER01': { width: 3, height: 5 } })
 })

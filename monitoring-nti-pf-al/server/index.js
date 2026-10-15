@@ -38,6 +38,7 @@ const HISTORY_RANGES = new Map([
   ['6h', 21600],
   ['24h', 86400],
   ['7d', 604800],
+  ['30d', 2592000],
 ])
 
 let pool
@@ -334,8 +335,18 @@ app.get('/api/history', requireAuth, async (request, response) => {
     for (const [valueType, table] of [[0, 'history'], [3, 'history_uint']]) {
       const tableIds = items.filter((item) => Number(item.value_type) === valueType).map((item) => Number(item.itemid))
       if (!tableIds.length) continue
+      const bucketSeconds = Math.max(1, Math.floor(seconds / 300))
       const recentSamples = tableIds.map(() => (
-        `(SELECT itemid, clock, value FROM ${table} WHERE itemid = ? AND clock >= UNIX_TIMESTAMP() - ? ORDER BY clock DESC LIMIT 300)`
+        `(SELECT itemid, bucket * ${bucketSeconds} AS clock, average_value AS value FROM (
+          SELECT itemid, bucket, AVG(value) AS average_value FROM (
+            SELECT itemid, FLOOR(clock / ${bucketSeconds}) AS bucket, value
+            FROM ${table}
+            WHERE itemid = ? AND clock >= UNIX_TIMESTAMP() - ?
+          ) AS samples
+          GROUP BY itemid, bucket
+          ORDER BY bucket DESC
+          LIMIT 300
+        ) AS bucket_averages)`
       )).join(' UNION ALL ')
       const [rows] = await database.execute(
         `SELECT itemid, clock, value FROM (${recentSamples}) AS recent ORDER BY itemid, clock`,

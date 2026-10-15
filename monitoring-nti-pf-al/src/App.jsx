@@ -26,6 +26,7 @@ const EMPTY_LAYOUT = {
   orderIcmp: [],
   orderServers: [],
   assignments: {},
+  cardSizes: {},
   widgets: [],
 }
 
@@ -34,6 +35,7 @@ const EMPTY_CONNECTIVITY_LAYOUT = {
   hiddenIcmp: [],
   orderIcmp: [],
   assignments: {},
+  cardSizes: {},
 }
 
 const EMPTY_SERVER_LAYOUT = {
@@ -41,6 +43,7 @@ const EMPTY_SERVER_LAYOUT = {
   hiddenServers: [],
   orderServers: [],
   assignments: {},
+  cardSizes: {},
 }
 
 function ConfirmDialog({ title, message, confirmLabel = 'Excluir', onCancel, onConfirm, busy = false }) {
@@ -197,16 +200,18 @@ function alertEventLabel(action) {
   return { opened: 'Alerta aberto', resolved: 'Alerta resolvido', acknowledged: 'Alerta reconhecido' }[action] || action
 }
 
-function IcmpCard({ host, editMode, canDelete, onRemove, onDragStart, onDragOver, onDrop }) {
+function IcmpCard({ host, editMode, canDelete, onRemove, onDragStart, onDragOver, onDrop, size, onResize }) {
   return (
     <article
-      className={`icmp-card ${editMode ? 'card-editable' : ''}`}
+      className={`icmp-card grid-resizable-card card-width-${size?.width || 1} ${editMode ? 'card-editable' : ''}`}
+      style={{ '--card-width': size?.width || 1, '--card-height': size?.height || 1 }}
       draggable={editMode}
       onDragStart={(event) => onDragStart(event, 'icmp', host.host_name)}
       onDragOver={onDragOver}
       onDrop={(event) => onDrop(event, 'icmp', host.host_name)}
     >
       {editMode && canDelete && <button className="card-remove" type="button" aria-label={`Remover ${host.host_name}`} onClick={() => onRemove('icmp', host.host_name)}><Icon name="close" size={13} /></button>}
+      {editMode && canDelete && <button className="widget-resize-handle card-resize-handle" type="button" onPointerDown={(event) => onResize(event, 'icmp', host.host_name)} aria-label={`Arraste para redimensionar ${host.host_name}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
       <div className="icmp-card-header">
         <div className="host-mark"><Icon name="network" size={17} /></div>
         <div className="host-heading">
@@ -252,16 +257,18 @@ function ResourceBar({ label, value, detail, color }) {
   )
 }
 
-function ServerCard({ server, editMode, canDelete, onRemove, onDragStart, onDragOver, onDrop }) {
+function ServerCard({ server, editMode, canDelete, onRemove, onDragStart, onDragOver, onDrop, size, onResize }) {
   return (
     <article
-      className={`server-card ${editMode ? 'card-editable' : ''}`}
+      className={`server-card grid-resizable-card card-width-${size?.width || 1} ${editMode ? 'card-editable' : ''}`}
+      style={{ '--card-width': size?.width || 1, '--card-height': size?.height || 3 }}
       draggable={editMode}
       onDragStart={(event) => onDragStart(event, 'servers', server.host_name)}
       onDragOver={onDragOver}
       onDrop={(event) => onDrop(event, 'servers', server.host_name)}
     >
       {editMode && canDelete && <button className="card-remove" type="button" aria-label={`Remover ${server.host_name}`} onClick={() => onRemove('servers', server.host_name)}><Icon name="close" size={13} /></button>}
+      {editMode && canDelete && <button className="widget-resize-handle card-resize-handle" type="button" onPointerDown={(event) => onResize(event, 'servers', server.host_name)} aria-label={`Arraste para redimensionar ${server.host_name}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
       <div className="server-header">
         <div className="server-mark"><Icon name="server" size={18} /></div>
         <div className="server-heading">
@@ -359,6 +366,7 @@ function SectionDialog({ dialog, onClose, onSave }) {
             <select value={kind} onChange={(event) => setKind(event.target.value)}>
               <option value="icmp">Rede e aplicações (ICMP)</option>
               <option value="servers">Servidores (CPU, RAM e discos)</option>
+              <option value="consumption">Consumo de dados e tráfego</option>
             </select>
           </label>
         )}
@@ -423,7 +431,7 @@ function MetricWidget({ widget, data }) {
         pointRadius: 0,
         pointHoverRadius: 4,
         tension: 0.32,
-        spanGaps: false,
+        spanGaps: series.length > 1,
         fill: series.length === 1,
       }
     }),
@@ -443,7 +451,19 @@ function MetricWidget({ widget, data }) {
         bodyColor: '#c5d3e5',
         padding: 10,
         callbacks: {
-          title: () => '',
+          title: (items) => {
+            const timestamp = Date.parse(items[0]?.label || '')
+            return Number.isFinite(timestamp)
+              ? new Intl.DateTimeFormat('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              }).format(timestamp)
+              : ''
+          },
           label: (item) => `${item.dataset.label}: ${formatNumber(item.parsed.y, 2)} ${unitByAxis.get(item.dataset.yAxisID) || ''}`.trim(),
         },
       },
@@ -519,7 +539,7 @@ function MetricWidget({ widget, data }) {
   )
 }
 
-function WidgetDialog({ onClose, onSave, widget, dashboardType }) {
+function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
   const [hosts, setHosts] = useState([])
   const [catalog, setCatalog] = useState([])
   const [selectedItemDetails, setSelectedItemDetails] = useState(widget?.items || [])
@@ -530,7 +550,7 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType }) {
   const [range, setRange] = useState(widget?.range || '1h')
   const [mapSizePx, setMapSizePx] = useState(widget?.mapSizePx || 80)
   const [title, setTitle] = useState(widget?.title || '')
-  const [type, setType] = useState(widget?.type || (['network', 'topology'].includes(dashboardType) ? 'availability' : 'timeseries'))
+  const [type, setType] = useState(widget?.type || (sectionId ? 'timeseries' : ['network', 'topology'].includes(dashboardType) ? 'availability' : 'timeseries'))
   const [search, setSearch] = useState('')
   const [itemPage, setItemPage] = useState(0)
   const [hasMoreItems, setHasMoreItems] = useState(false)
@@ -632,6 +652,7 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType }) {
       id: widget?.id || crypto.randomUUID(),
       title: title.trim() || selected.itemName,
       type,
+      ...((widget?.sectionId || sectionId) ? { sectionId: widget?.sectionId || sectionId } : {}),
       itemId: selected.itemId,
       itemIds: items.map((item) => item.itemId),
       items,
@@ -644,6 +665,7 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType }) {
       itemName: selected.itemName,
       unit: selected.unit,
       width: widget?.width || (type === 'timeseries' ? 2 : 1),
+      height: widget?.height || (type === 'timeseries' ? 2 : 1),
     })
   }
 
@@ -654,10 +676,10 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType }) {
         <label className="dialog-field widget-host-field"><span>Equipamento</span><select autoFocus value={hostId} onChange={(event) => { setHostId(event.target.value); setItemId(''); setItemPickerValue(''); setSelectedItemIds([]); setSelectedItemDetails([]); setTitle(''); setSearch(''); setItemPage(0); setHasMoreItems(false); setCatalog([]) }} required><option value="">{hostsLoading ? 'Carregando equipamentos...' : 'Selecione um equipamento...'}</option>{hosts.map((host) => <option key={host.hostId} value={host.hostId}>{host.hostName}</option>)}</select></label>
         {error && <p className="dialog-error" role="alert">{error}</p>}
         {hostId && <>
-          <label className="dialog-field widget-type-field"><span>Tipo de visualização</span><select value={type} onChange={(event) => { const nextType = event.target.value; setType(nextType); if (nextType !== 'timeseries') { setSelectedItemIds((current) => current.slice(0, 1)); setItemId((current) => current || String(selectedItemIds[0] || '')) } }}>
+          {!sectionId && <label className="dialog-field widget-type-field"><span>Tipo de visualização</span><select value={type} onChange={(event) => { const nextType = event.target.value; setType(nextType); if (nextType !== 'timeseries') { setSelectedItemIds((current) => current.slice(0, 1)); setItemId((current) => current || String(selectedItemIds[0] || '')) } }}>
             {['network', 'topology'].includes(dashboardType) ? <><option value="availability">Host UP / DOWN</option><option value="timeseries">Gráfico temporal (até 8 itens)</option></> : <><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="metric">Valor atual</option></>}
-          </select></label>
-          {type === 'timeseries' && <label className="dialog-field widget-range-field"><span>Período do gráfico</span><select value={range} onChange={(event) => setRange(event.target.value)}><option value="15m">Últimos 15 minutos</option><option value="1h">Última hora</option><option value="6h">Últimas 6 horas</option><option value="24h">Últimas 24 horas</option><option value="7d">Últimos 7 dias</option></select></label>}
+          </select></label>}
+          {type === 'timeseries' && <label className="dialog-field widget-range-field"><span>Período do gráfico</span><select value={range} onChange={(event) => setRange(event.target.value)}><option value="15m">Últimos 15 minutos</option><option value="1h">Última hora</option><option value="6h">Últimas 6 horas</option><option value="24h">Último dia</option><option value="7d">Últimos 7 dias</option><option value="30d">Últimos 30 dias (mensal)</option></select></label>}
           {type === 'availability' && dashboardType === 'topology' && <label className="dialog-field"><span>Tamanho do bloco (px)</span><input type="number" min="56" max="480" step="8" value={mapSizePx} onChange={(event) => setMapSizePx(Math.max(56, Math.min(480, Number(event.target.value) || 56)))} /><span className="dialog-hint">Largura e altura iguais. Padrão: 80 × 80 px.</span></label>}
           <label className="dialog-field widget-search-field"><span>Buscar item deste equipamento</span><input value={search} onChange={(event) => { setSearch(event.target.value); setItemPage(0); setHasMoreItems(false); setCatalog([]) }} placeholder={type === 'availability' ? 'icmpping, ping, status...' : 'CPU, memória, tráfego enviado/recebido...'} /></label>
           {type === 'timeseries' ? (
@@ -1034,7 +1056,7 @@ function App() {
         .map(Number))].sort((a, b) => a - b)]))),
     [layout.widgets],
   )
-  const mapPositions = useMemo(() => resolveMapPositions(layout.widgets), [layout.widgets])
+  const mapPositions = useMemo(() => resolveMapPositions(layout.widgets.filter((widget) => !widget.sectionId)), [layout.widgets])
   const mapCanvasHeight = Math.max(360, ...mapPositions.map((item) => item.mapY + item.height + 24))
 
   const loadDashboard = useCallback(async (signal) => {
@@ -1535,7 +1557,7 @@ function App() {
   const handleDeleteSection = (section) => {
     setConfirmation({
       title: 'Excluir seção?',
-      message: `A seção "${section.title}" será removida. Os cards associados serão realocados para outra seção do mesmo tipo, se houver.`,
+      message: `A seção "${section.title}" será removida. Os cards ou indicadores associados serão realocados para outra seção do mesmo tipo, se houver.`,
       onConfirm: () => {
         const fallback = activeLayout.sections.find((candidate) => candidate.kind === section.kind && candidate.id !== section.id)
         setConfigError('')
@@ -1550,6 +1572,13 @@ function App() {
             ...current,
             sections: current.sections.filter((candidate) => candidate.id !== section.id),
             assignments,
+            widgets: section.kind === 'consumption'
+              ? current.widgets.map((widget) => {
+                if (widget.sectionId !== section.id) return widget
+                if (fallback) return { ...widget, sectionId: fallback.id }
+                return Object.fromEntries(Object.entries(widget).filter(([key]) => key !== 'sectionId'))
+              })
+              : current.widgets,
           }
         })
       },
@@ -1682,14 +1711,19 @@ function App() {
 
   const moveWidget = (id, offset) => {
     setLayout((current) => {
-      const widgets = [...current.widgets]
-      const index = widgets.findIndex((item) => item.id === id)
+      const target = current.widgets.find((item) => item.id === id)
+      if (!target) return current
+      const group = current.widgets.filter((item) => item.sectionId === target.sectionId)
+      const index = group.findIndex((item) => item.id === id)
       const destination = index + offset
-      if (index < 0 || destination < 0 || destination >= widgets.length) return current
-      const currentWidget = widgets[index]
-      widgets[index] = widgets[destination]
-      widgets[destination] = currentWidget
-      return { ...current, widgets }
+      if (destination < 0 || destination >= group.length) return current
+      const [moved] = group.splice(index, 1)
+      group.splice(destination, 0, moved)
+      let groupIndex = 0
+      return {
+        ...current,
+        widgets: current.widgets.map((item) => item.sectionId === target.sectionId ? group[groupIndex++] : item),
+      }
     })
   }
 
@@ -1704,6 +1738,77 @@ function App() {
             : { ...widget, width: Math.max(1, Math.min(4, (widget.width || 1) + offset)) }
         : widget),
     }))
+  }
+
+  const resizeGridItemByDrag = (event, onResize) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const grid = event.currentTarget.closest('.icmp-grid, .server-grid, .custom-widget-grid:not(.topology-map)')
+    if (!grid) return
+    const style = window.getComputedStyle(grid)
+    const columns = style.gridTemplateColumns.split(' ').filter(Boolean)
+    const columnWidth = columns.length ? Number.parseFloat(columns[0]) + Number.parseFloat(style.columnGap || 0) : 280
+    const rowHeight = Number.parseFloat(style.gridAutoRows) || 150
+    const maxWidth = Math.min(columns.length || 4, 4)
+    const startX = event.clientX
+    const startY = event.clientY
+    const update = (moveEvent) => {
+      onResize(
+        Math.round((moveEvent.clientX - startX) / columnWidth),
+        Math.round((moveEvent.clientY - startY) / rowHeight),
+        maxWidth,
+      )
+    }
+    const stop = () => {
+      window.removeEventListener('pointermove', update)
+      window.removeEventListener('pointerup', stop)
+      window.removeEventListener('pointercancel', stop)
+    }
+    window.addEventListener('pointermove', update)
+    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel', stop)
+  }
+
+  const resizeWidgetByDrag = (event, widget) => {
+    const startWidth = widget.width || 1
+    const startHeight = widget.height || (widget.type === 'timeseries' ? 2 : 1)
+    let currentWidth = startWidth
+    let currentHeight = startHeight
+    resizeGridItemByDrag(event, (widthDelta, heightDelta, maxWidth) => {
+      const minHeight = widget.type === 'timeseries' ? 2 : 1
+      const width = Math.max(1, Math.min(maxWidth, startWidth + widthDelta))
+      const height = Math.max(minHeight, Math.min(8, startHeight + heightDelta))
+      if (width === currentWidth && height === currentHeight) return
+      currentWidth = width
+      currentHeight = height
+      setLayout((current) => ({
+        ...current,
+        widgets: current.widgets.map((item) => item.id === widget.id
+          ? { ...item, width, height }
+          : item),
+      }))
+    })
+  }
+
+  const resizeHostCardByDrag = (event, kind, hostName) => {
+    const sizeKey = `${kind}:${hostName}`
+    const size = activeLayout.cardSizes[sizeKey] || { width: 1, height: kind === 'servers' ? 3 : 1 }
+    let currentWidth = size.width
+    let currentHeight = size.height
+    resizeGridItemByDrag(event, (widthDelta, heightDelta, maxWidth) => {
+      const width = Math.max(1, Math.min(maxWidth, size.width + widthDelta))
+      const height = Math.max(1, Math.min(8, size.height + heightDelta))
+      if (width === currentWidth && height === currentHeight) return
+      currentWidth = width
+      currentHeight = height
+      updateActiveLayout((current) => ({
+        ...current,
+        cardSizes: {
+          ...current.cardSizes,
+          [sizeKey]: { width, height },
+        },
+      }))
+    })
   }
 
   const moveMapWidgetByPixels = (event, widget) => {
@@ -2063,19 +2168,19 @@ function App() {
             </section>
           )}
 
-          {page === 'dashboard' && layout.widgets.length > 0 && (
+          {page === 'dashboard' && layout.widgets.some((widget) => !widget.sectionId) && (
             <section
               className={`custom-widget-grid ${layout.type === 'topology' ? 'topology-map' : ''}`}
               aria-label={layout.type === 'topology' ? 'Mapa personalizável de rede' : 'Indicadores personalizados'}
               style={layout.type === 'topology' ? { height: `${mapCanvasHeight}px` } : undefined}
             >
-              {layout.widgets.map((widget, index) => {
+              {layout.widgets.filter((widget) => !widget.sectionId).map((widget, index) => {
                 const isTopology = layout.type === 'topology'
                 const isMapHost = isTopology && widget.type === 'availability'
                 const mapSize = widget.mapSizePx || 80
                 const mapCols = widget.mapCols || 4
                 const mapRows = widget.mapRows || 4
-                const mapPosition = mapPositions[index]
+                const mapPosition = mapPositions.find((item) => item.id === widget.id)
                 const wrapperClass = isTopology
                   ? `custom-widget-wrap topology-widget-wrap ${isMapHost ? 'topology-host-wrap' : 'topology-chart-wrap'}`
                   : `custom-widget-wrap widget-width-${widget.width || 1}`
@@ -2088,7 +2193,7 @@ function App() {
                       top: `${mapPosition.mapY}px`,
                       width: `${mapPosition.width}px`,
                       height: `${mapPosition.height}px`,
-                    } : undefined}
+                    } : { '--widget-height': widget.height || (widget.type === 'timeseries' ? 2 : 1) }}
                     key={widget.id}
                     draggable={!isTopology && canEditDashboard}
                     onDragStart={!isTopology && canEditDashboard ? (event) => event.dataTransfer.setData('text/plain', widget.id) : undefined}
@@ -2111,7 +2216,7 @@ function App() {
                     {canEditDashboard && <div className={`widget-controls ${isAdministrator ? '' : 'moderator-controls'}`} role="group" aria-label={`Controles de ${widget.title}`}>
                       {isAdministrator && <><button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button><span className="widget-control-divider" /></>}
                       {!isTopology && <><button type="button" onClick={() => moveWidget(widget.id, -1)} disabled={index === 0} aria-label={`Mover ${widget.title} para esquerda`} title="Mover para esquerda"><Icon name="chevron" size={14} className="chevron-left" /></button>
-                      <button type="button" onClick={() => moveWidget(widget.id, 1)} disabled={index === layout.widgets.length - 1} aria-label={`Mover ${widget.title} para direita`} title="Mover para direita"><Icon name="chevron" size={14} /></button></>}
+                      <button type="button" onClick={() => moveWidget(widget.id, 1)} disabled={index === layout.widgets.filter((item) => !item.sectionId).length - 1} aria-label={`Mover ${widget.title} para direita`} title="Mover para direita"><Icon name="chevron" size={14} /></button></>}
                       {isAdministrator && <><span className="widget-control-divider" />
                         <button type="button" onClick={() => resizeWidget(widget.id, -1)} disabled={isTopology ? isMapHost ? mapSize <= 56 : mapCols <= 2 && mapRows <= 4 : (widget.width || 1) <= 1} aria-label={`Reduzir tamanho de ${widget.title}`} title={isMapHost ? 'Diminuir bloco' : 'Diminuir tamanho'}>−</button>
                         <button type="button" onClick={() => resizeWidget(widget.id, 1)} disabled={isTopology ? isMapHost ? mapSize >= 480 : mapCols >= 24 && mapRows >= 24 : (widget.width || 1) >= 4} aria-label={`Aumentar tamanho de ${widget.title}`} title={isMapHost ? 'Aumentar bloco' : 'Aumentar tamanho'}>+</button>
@@ -2123,6 +2228,7 @@ function App() {
                       </>}
                     </div>}
                     {isAdministrator && isTopology && widget.type === 'timeseries' && <button className="widget-resize-handle" type="button" onPointerDown={(event) => resizeMapWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
+                    {isAdministrator && !isTopology && <button className="widget-resize-handle" type="button" onPointerDown={(event) => resizeWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
                   </div>
                 )
               })}
@@ -2159,14 +2265,16 @@ function App() {
                   : [{ id: '__all_servers__', title: 'Servidores', kind: 'servers' }])
                 : layout.sections
           ).map((section) => {
+            const isConsumptionSection = page === 'dashboard' && section.kind === 'consumption'
+            const sectionWidgets = isConsumptionSection ? layout.widgets.filter((widget) => widget.sectionId === section.id) : []
             const sectionCards = page === 'servers' && section.id === '__all_servers__'
               ? orderVisible(dashboard.servers, activeLayout.orderServers, activeLayout.hiddenServers)
                 .filter((server) => server.host_name.toLowerCase().includes(search.toLowerCase()))
               : cardsForSection(section)
             const isIcmp = section.kind === 'icmp'
             const isVirtualServerSection = section.id === '__all_servers__'
-            const sectionIcon = isIcmp ? 'network' : 'server'
-            const sectionCountLabel = isIcmp ? 'sistemas' : 'hosts'
+            const sectionIcon = isConsumptionSection ? 'activity' : isIcmp ? 'network' : 'server'
+            const sectionCountLabel = isConsumptionSection ? 'indicadores' : isIcmp ? 'sistemas' : 'hosts'
             const cardEmptyTitle = loading
               ? (isIcmp ? 'Conectando ao Zabbix...' : 'Carregando servidores...')
               : search
@@ -2182,24 +2290,52 @@ function App() {
               <section className="content-section" id={section.id} key={section.id}>
                 <div className="section-title-row">
                   <div className="section-title">
-                    <span className={`section-icon ${isIcmp ? 'network-icon' : 'server-icon'}`}><Icon name={sectionIcon} size={17} /></span>
-                    <div><h2>{section.title}</h2><p>{isIcmp ? 'Disponibilidade, latência e perda de pacotes' : 'Uso de CPU, memória e armazenamento'}</p></div>
+                    <span className={`section-icon ${isConsumptionSection ? 'consumption-icon' : isIcmp ? 'network-icon' : 'server-icon'}`}><Icon name={sectionIcon} size={17} /></span>
+                    <div><h2>{section.title}</h2><p>{isConsumptionSection ? 'Tráfego, volume e consumo ao longo do tempo' : isIcmp ? 'Disponibilidade, latência e perda de pacotes' : 'Uso de CPU, memória e armazenamento'}</p></div>
                   </div>
                   <div className="section-actions">
-                    <span className="section-counter">{sectionCards.length} {sectionCountLabel}</span>
+                    <span className="section-counter">{isConsumptionSection ? sectionWidgets.length : sectionCards.length} {sectionCountLabel}</span>
+                    {editMode && canEditDashboard && isConsumptionSection && <button className="edit-panel-button consumption-add-button" type="button" onClick={() => setWidgetDialog({ sectionId: section.id })}><Icon name="plus" size={14} />Adicionar métrica</button>}
                     {editMode && isAdministrator && !isVirtualServerSection && <>
                       <button className="section-action" type="button" aria-label={`Renomear ${section.title}`} onClick={() => setSectionDialog({ mode: 'rename', id: section.id, title: section.title, kind: section.kind })}><Icon name="edit" size={13} /></button>
                       <button className="section-action section-delete" type="button" aria-label={`Excluir ${section.title}`} onClick={() => handleDeleteSection(section)}><Icon name="trash" size={13} /></button>
                     </>}
                   </div>
                 </div>
-                {editMode && !isVirtualServerSection && (
+                {editMode && !isVirtualServerSection && !isConsumptionSection && (
                   <div className="layout-toolbar">
-                    <span><Icon name="grip" size={15} />Arraste os cards para reordenar ou mover entre seções compatíveis</span>
+                    <span><Icon name="grip" size={15} />Arraste para organizar; use a alça no canto do card para redimensionar</span>
                     <HostPicker hosts={availableForSection(section)} onAdd={(name) => handleAddCard(section, name)} />
                   </div>
                 )}
-                {sectionCards.length ? (
+                {isConsumptionSection ? (
+                  sectionWidgets.length ? (
+                    <div className="custom-widget-grid consumption-widget-grid">
+                      {sectionWidgets.map((widget, index) => (
+                        <div className={`custom-widget-wrap widget-width-${widget.width || 1}`} style={{ '--widget-height': widget.height || 2 }} key={widget.id}>
+                          <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} />
+                          {canEditDashboard && <div className={`widget-controls ${isAdministrator ? '' : 'moderator-controls'}`} role="group" aria-label={`Controles de ${widget.title}`}>
+                            {isAdministrator && <><button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button><span className="widget-control-divider" /></>}
+                            <button type="button" onClick={() => moveWidget(widget.id, -1)} disabled={index === 0} aria-label={`Mover ${widget.title} para esquerda`} title="Mover para esquerda"><Icon name="chevron" size={14} className="chevron-left" /></button>
+                            <button type="button" onClick={() => moveWidget(widget.id, 1)} disabled={index === sectionWidgets.length - 1} aria-label={`Mover ${widget.title} para direita`} title="Mover para direita"><Icon name="chevron" size={14} /></button>
+                            {isAdministrator && <><span className="widget-control-divider" /><button type="button" className="widget-remove-button" onClick={() => setConfirmation({
+                              title: 'Excluir indicador?',
+                              message: `O indicador "${widget.title}" será removido deste painel. Esta ação não pode ser desfeita.`,
+                              onConfirm: () => setLayout((current) => ({ ...current, widgets: current.widgets.filter((item) => item.id !== widget.id) })),
+                            })} aria-label={`Remover ${widget.title}`} title="Remover"><Icon name="close" size={13} /></button></>}
+                          </div>}
+                          {isAdministrator && <button className="widget-resize-handle" type="button" onPointerDown={(event) => resizeWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="consumption-empty">
+                      <span className="consumption-empty-mark"><Icon name="activity" size={19} /></span>
+                      <div><strong>Nenhum indicador de consumo</strong><span>Adicione um item numérico do Zabbix e escolha o período que deseja acompanhar.</span></div>
+                      {editMode && canEditDashboard && <button className="edit-panel-button" type="button" onClick={() => setWidgetDialog({ sectionId: section.id })}><Icon name="plus" size={14} />Adicionar métrica</button>}
+                    </div>
+                  )
+                ) : sectionCards.length ? (
                   <div
                     className={`${isIcmp ? 'icmp-grid' : 'server-grid'} ${editMode ? 'grid-editing' : ''}`}
                     onDragOver={(event) => { if (editMode) event.preventDefault() }}
@@ -2207,8 +2343,8 @@ function App() {
                   >
                     {sectionCards.map((item) => (
                       isIcmp
-                        ? <IcmpCard key={item.host_name} host={item} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
-                        : <ServerCard key={item.host_name} server={item} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
+                        ? <IcmpCard key={item.host_name} host={item} size={activeLayout.cardSizes[`icmp:${item.host_name}`]} onResize={resizeHostCardByDrag} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
+                        : <ServerCard key={item.host_name} server={item} size={activeLayout.cardSizes[`servers:${item.host_name}`]} onResize={resizeHostCardByDrag} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
                     ))}
                   </div>
                 ) : (
@@ -2232,7 +2368,7 @@ function App() {
       )}
       {sectionDialog && <SectionDialog dialog={sectionDialog} onClose={() => setSectionDialog(null)} onSave={handleSaveSection} />}
       {dashboardCreateOpen && <DashboardCreateDialog onClose={() => setDashboardCreateOpen(false)} onCreate={createDashboard} />}
-      {widgetDialog && <WidgetDialog onClose={() => setWidgetDialog(null)} onSave={saveWidget} widget={widgetDialog.id ? widgetDialog : null} dashboardType={layout.type || 'general'} />}
+      {widgetDialog && <WidgetDialog onClose={() => setWidgetDialog(null)} onSave={saveWidget} widget={widgetDialog.id ? widgetDialog : null} sectionId={widgetDialog.sectionId} dashboardType={layout.type || 'general'} />}
       {confirmation && <ConfirmDialog title={confirmation.title} message={confirmation.message} onCancel={() => setConfirmation(null)} onConfirm={() => {
         const action = confirmation.onConfirm
         setConfirmation(null)

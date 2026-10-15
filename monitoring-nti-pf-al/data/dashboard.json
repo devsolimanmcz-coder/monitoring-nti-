@@ -1,701 +1,6 @@
 {
   "dashboards": [
     {
-      "id": "dashboard-c242776a-38c8-43a5-8231-f69a47b1936a",
-      "title": "mm",
-      "type": "topology",
-      "favorite": true,
-      "sections": [
-        {
-          "id": "503afbef-ed7a-4ab4-bb74-c6954df2c951",
-          "title": "infra rede",
-          "kind": "icmp"
-        },
-        {
-          "id": "f10f2447-e357-4a5b-ab2a-92d3cc9161f6",
-          "title": "infra",
-          "kind": "icmp"
-        }
-      ],
-      "hiddenIcmp": [
-        "LINK MCOIP-08916",
-        "SINPA"
-      ],
-      "hiddenServers": [],
-      "orderIcmp": [],
-      "orderServers": [],
-      "assignments": {},
-      "widgets": [
-        {
-          "id": "f856294a-f790-4ec2-80c6-cd21647c01ac",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73359,
-          "itemIds": [
-            73359
-          ],
-          "items": [
-            {
-              "itemId": 73359,
-              "hostId": 10757,
-              "hostName": "AP-CISCO-6E0C",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10757,
-          "hostName": "AP-CISCO-6E0C",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 0,
-          "mapY": 0
-        },
-        {
-          "id": "9ef6adc2-7373-455f-b37d-c93ef4cb6a10",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73492,
-          "itemIds": [
-            73492
-          ],
-          "items": [
-            {
-              "itemId": 73492,
-              "hostId": 10776,
-              "hostName": "AP-CISCO-0BAC",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10776,
-          "hostName": "AP-CISCO-0BAC",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 92,
-          "mapY": 0
-        },
-        {
-          "id": "629d5214-2012-40e2-8f3d-999e4a4cc780",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73489,
-          "itemIds": [
-            73489
-          ],
-          "items": [
-            {
-              "itemId": 73489,
-              "hostId": 10775,
-              "hostName": "AP-CISCO-0D50",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10775,
-          "hostName": "AP-CISCO-0D50",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 184,
-          "mapY": 0
-        },
-        {
-          "id": "34649e96-4cc0-4f07-a094-29a00b3b93c5",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 72249,
-          "itemIds": [
-            72249
-          ],
-          "items": [
-            {
-              "itemId": 72249,
-              "hostId": 10746,
-              "hostName": "AERO-MCZ-PF-AL",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10746,
-          "hostName": "AERO-MCZ-PF-AL",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 276,
-          "mapY": 0
-        },
-        {
-          "id": "83a8477d-88e7-45c4-8b45-faab06f44482",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73434,
-          "itemIds": [
-            73434
-          ],
-          "items": [
-            {
-              "itemId": 73434,
-              "hostId": 10763,
-              "hostName": "AP-CISCO-1318",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10763,
-          "hostName": "AP-CISCO-1318",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 368,
-          "mapY": 0
-        },
-        {
-          "id": "87afac18-6d04-4262-a0c5-c2ca044635ef",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73477,
-          "itemIds": [
-            73477
-          ],
-          "items": [
-            {
-              "itemId": 73477,
-              "hostId": 10771,
-              "hostName": "AP-CISCO-1CF4-ARAPIRACA",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10771,
-          "hostName": "AP-CISCO-1CF4-ARAPIRACA",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 460,
-          "mapY": 0
-        },
-        {
-          "id": "617fb9d7-f96b-445c-b5b7-1f483ee7d921",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 56091,
-          "itemIds": [
-            56091
-          ],
-          "items": [
-            {
-              "itemId": 56091,
-              "hostId": 10641,
-              "hostName": "CTI-HOD-ICMP",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10641,
-          "hostName": "CTI-HOD-ICMP",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 552,
-          "mapY": 0
-        },
-        {
-          "id": "8e0d040c-7277-4cdc-9cae-5a78f48133b6",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73477,
-          "itemIds": [
-            73477
-          ],
-          "items": [
-            {
-              "itemId": 73477,
-              "hostId": 10771,
-              "hostName": "AP-CISCO-1CF4-ARAPIRACA",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10771,
-          "hostName": "AP-CISCO-1CF4-ARAPIRACA",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 644,
-          "mapY": 0
-        },
-        {
-          "id": "97888015-ace9-4eeb-af07-6733a592307a",
-          "title": "Interface GigabitEthernet0/0/0: Bits received",
-          "type": "timeseries",
-          "range": "1h",
-          "itemId": 61450,
-          "itemIds": [
-            61450,
-            61468,
-            61444,
-            61438
-          ],
-          "items": [
-            {
-              "itemId": 61450,
-              "hostId": 10604,
-              "hostName": "LINK MCOIP-08916",
-              "itemName": "Interface GigabitEthernet0/0/0: Bits received",
-              "key": "net.if.in[ifInOctets.1]",
-              "unit": "bps"
-            },
-            {
-              "itemId": 61468,
-              "hostId": 10604,
-              "hostName": "LINK MCOIP-08916",
-              "itemName": "Interface GigabitEthernet0/0/0: Bits sent",
-              "key": "net.if.out[ifOutOctets.1]",
-              "unit": "bps"
-            },
-            {
-              "itemId": 61444,
-              "hostId": 10604,
-              "hostName": "LINK MCOIP-08916",
-              "itemName": "Interface GigabitEthernet0/0/0: Inbound packets with errors",
-              "key": "net.if.in.errors[ifInErrors.1]",
-              "unit": ""
-            },
-            {
-              "itemId": 61438,
-              "hostId": 10604,
-              "hostName": "LINK MCOIP-08916",
-              "itemName": "Interface GigabitEthernet0/0/0: Inbound packets discarded",
-              "key": "net.if.in.discards[ifInDiscards.1]",
-              "unit": ""
-            }
-          ],
-          "hostId": 10604,
-          "hostName": "LINK MCOIP-08916",
-          "itemName": "Interface GigabitEthernet0/0/0: Bits received",
-          "unit": "bps",
-          "width": 2,
-          "mapSizePx": 80,
-          "mapCols": 14,
-          "mapRows": 4,
-          "mapX": 1160,
-          "mapY": 240
-        },
-        {
-          "id": "32b56e3e-9305-44ee-a587-13088e4aef23",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73486,
-          "itemIds": [
-            73486
-          ],
-          "items": [
-            {
-              "itemId": 73486,
-              "hostId": 10774,
-              "hostName": "AP-CISCO-1CDC",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10774,
-          "hostName": "AP-CISCO-1CDC",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 736,
-          "mapY": 0
-        },
-        {
-          "id": "3fb9b462-025d-45ea-8c90-2516645b3064",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73359,
-          "itemIds": [
-            73359
-          ],
-          "items": [
-            {
-              "itemId": 73359,
-              "hostId": 10757,
-              "hostName": "AP-CISCO-6E0C",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10757,
-          "hostName": "AP-CISCO-6E0C",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 828,
-          "mapY": 0
-        },
-        {
-          "id": "d4b7d2f3-5763-49e3-a120-d6ebf455c981",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73492,
-          "itemIds": [
-            73492
-          ],
-          "items": [
-            {
-              "itemId": 73492,
-              "hostId": 10776,
-              "hostName": "AP-CISCO-0BAC",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10776,
-          "hostName": "AP-CISCO-0BAC",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 920,
-          "mapY": 0
-        },
-        {
-          "id": "cfd03a59-1200-4451-8cbb-b55807d7069c",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73489,
-          "itemIds": [
-            73489
-          ],
-          "items": [
-            {
-              "itemId": 73489,
-              "hostId": 10775,
-              "hostName": "AP-CISCO-0D50",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10775,
-          "hostName": "AP-CISCO-0D50",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 1012,
-          "mapY": 0
-        },
-        {
-          "id": "c2e37c66-dd15-4284-af0e-ba6bea4f700d",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 72249,
-          "itemIds": [
-            72249
-          ],
-          "items": [
-            {
-              "itemId": 72249,
-              "hostId": 10746,
-              "hostName": "AERO-MCZ-PF-AL",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10746,
-          "hostName": "AERO-MCZ-PF-AL",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 194,
-          "mapY": 91
-        },
-        {
-          "id": "099c9645-a9df-4fa1-ac24-c8dbdaf73301",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73434,
-          "itemIds": [
-            73434
-          ],
-          "items": [
-            {
-              "itemId": 73434,
-              "hostId": 10763,
-              "hostName": "AP-CISCO-1318",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10763,
-          "hostName": "AP-CISCO-1318",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 289,
-          "mapY": 85
-        },
-        {
-          "id": "315d9697-2a05-498d-b5b4-9a11bb1bb2c7",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73477,
-          "itemIds": [
-            73477
-          ],
-          "items": [
-            {
-              "itemId": 73477,
-              "hostId": 10771,
-              "hostName": "AP-CISCO-1CF4-ARAPIRACA",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10771,
-          "hostName": "AP-CISCO-1CF4-ARAPIRACA",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 920,
-          "mapY": 92
-        },
-        {
-          "id": "6326f7fc-93b3-4ea5-ad61-bb3dbe5ad866",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 56091,
-          "itemIds": [
-            56091
-          ],
-          "items": [
-            {
-              "itemId": 56091,
-              "hostId": 10641,
-              "hostName": "CTI-HOD-ICMP",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10641,
-          "hostName": "CTI-HOD-ICMP",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 1012,
-          "mapY": 92
-        },
-        {
-          "id": "2e1a2c10-ec69-4599-aefb-ea15bd94458f",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73477,
-          "itemIds": [
-            73477
-          ],
-          "items": [
-            {
-              "itemId": 73477,
-              "hostId": 10771,
-              "hostName": "AP-CISCO-1CF4-ARAPIRACA",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10771,
-          "hostName": "AP-CISCO-1CF4-ARAPIRACA",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 4,
-          "mapY": 73
-        },
-        {
-          "id": "2135e868-b89d-4394-985c-4223e9712e2d",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73486,
-          "itemIds": [
-            73486
-          ],
-          "items": [
-            {
-              "itemId": 73486,
-              "hostId": 10774,
-              "hostName": "AP-CISCO-1CDC",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10774,
-          "hostName": "AP-CISCO-1CDC",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 3,
-          "mapX": 104,
-          "mapY": 83
-        },
-        {
-          "id": "0ea8af26-e5ee-456a-95c8-e3e2718e6634",
-          "title": "Interface GigabitEthernet0/0/0: Bits received",
-          "type": "timeseries",
-          "range": "1h",
-          "itemId": 61450,
-          "itemIds": [
-            61450,
-            61468,
-            61444,
-            61438
-          ],
-          "items": [
-            {
-              "itemId": 61450,
-              "hostId": 10604,
-              "hostName": "LINK MCOIP-08916",
-              "itemName": "Interface GigabitEthernet0/0/0: Bits received",
-              "key": "net.if.in[ifInOctets.1]",
-              "unit": "bps"
-            },
-            {
-              "itemId": 61468,
-              "hostId": 10604,
-              "hostName": "LINK MCOIP-08916",
-              "itemName": "Interface GigabitEthernet0/0/0: Bits sent",
-              "key": "net.if.out[ifOutOctets.1]",
-              "unit": "bps"
-            },
-            {
-              "itemId": 61444,
-              "hostId": 10604,
-              "hostName": "LINK MCOIP-08916",
-              "itemName": "Interface GigabitEthernet0/0/0: Inbound packets with errors",
-              "key": "net.if.in.errors[ifInErrors.1]",
-              "unit": ""
-            },
-            {
-              "itemId": 61438,
-              "hostId": 10604,
-              "hostName": "LINK MCOIP-08916",
-              "itemName": "Interface GigabitEthernet0/0/0: Inbound packets discarded",
-              "key": "net.if.in.discards[ifInDiscards.1]",
-              "unit": ""
-            }
-          ],
-          "hostId": 10604,
-          "hostName": "LINK MCOIP-08916",
-          "itemName": "Interface GigabitEthernet0/0/0: Bits received",
-          "unit": "bps",
-          "width": 2,
-          "mapSizePx": 80,
-          "mapCols": 12,
-          "mapRows": 4,
-          "mapX": 0,
-          "mapY": 245
-        }
-      ]
-    },
-    {
-      "id": "dashboard-5dfb8a43-f3e8-4c61-b95b-29caee74271c",
-      "title": "MAP",
-      "type": "general",
-      "favorite": false,
-      "sections": [],
-      "hiddenIcmp": [],
-      "hiddenServers": [],
-      "orderIcmp": [],
-      "orderServers": [],
-      "assignments": {},
-      "widgets": []
-    },
-    {
       "id": "dashboard-48a68545-5267-469a-a245-7f84240db2cc",
       "title": "jmo",
       "type": "topology",
@@ -706,6 +11,7 @@
       "orderIcmp": [],
       "orderServers": [],
       "assignments": {},
+      "cardSizes": {},
       "widgets": [
         {
           "id": "2a73a20c-4512-42e8-a529-67479f88b348",
@@ -740,6 +46,7 @@
           "itemName": "Interface GigabitEthernet0/0/0: Bits received",
           "unit": "bps",
           "width": 2,
+          "height": 2,
           "mapSizePx": 80,
           "mapCols": 9,
           "mapRows": 4,
@@ -779,6 +86,7 @@
           "itemName": "Interface GigabitEthernet0/0/0: Bits received",
           "unit": "bps",
           "width": 1,
+          "height": 2,
           "mapSizePx": 80,
           "mapCols": 8,
           "mapRows": 4,
@@ -809,6 +117,7 @@
           "itemName": "ICMP ping",
           "unit": "",
           "width": 1,
+          "height": 1,
           "mapSizePx": 80,
           "mapCols": 4,
           "mapRows": 4,
@@ -852,6 +161,7 @@
         "AERO-MCZ-PF-AL": "263ca33f-4bce-4e9f-b186-6e947926da38",
         "LINK-ARAPIRACA-PEP": "263ca33f-4bce-4e9f-b186-6e947926da38"
       },
+      "cardSizes": {},
       "widgets": []
     },
     {
@@ -865,6 +175,74 @@
       "orderIcmp": [],
       "orderServers": [],
       "assignments": {},
+      "cardSizes": {},
+      "widgets": []
+    },
+    {
+      "id": "dashboard-f0db445f-b010-4121-9f2a-e17549092ec0",
+      "title": "consumo",
+      "type": "general",
+      "favorite": false,
+      "sections": [
+        {
+          "id": "58309576-31ba-40ac-b16b-b818cb969fb4",
+          "title": "mpls",
+          "kind": "consumption"
+        }
+      ],
+      "hiddenIcmp": [],
+      "hiddenServers": [],
+      "orderIcmp": [],
+      "orderServers": [],
+      "assignments": {},
+      "cardSizes": {},
+      "widgets": [
+        {
+          "id": "c2072fe4-9f2d-4415-b326-bfbe79bd58f6",
+          "title": "Interface GigabitEthernet0/0/0: Bits received",
+          "type": "timeseries",
+          "sectionId": "58309576-31ba-40ac-b16b-b818cb969fb4",
+          "range": "1h",
+          "itemId": 61450,
+          "itemIds": [
+            61450
+          ],
+          "items": [
+            {
+              "itemId": 61450,
+              "hostId": 10604,
+              "hostName": "LINK MCOIP-08916",
+              "itemName": "Interface GigabitEthernet0/0/0: Bits received",
+              "key": "net.if.in[ifInOctets.1]",
+              "unit": "bps"
+            }
+          ],
+          "hostId": 10604,
+          "hostName": "LINK MCOIP-08916",
+          "itemName": "Interface GigabitEthernet0/0/0: Bits received",
+          "unit": "bps",
+          "width": 2,
+          "height": 2,
+          "mapSizePx": 80,
+          "mapCols": 4,
+          "mapRows": 4,
+          "mapX": null,
+          "mapY": null
+        }
+      ]
+    },
+    {
+      "id": "dashboard-6dba49f0-d402-490e-9c47-522cd54c5170",
+      "title": "tt",
+      "type": "general",
+      "favorite": false,
+      "sections": [],
+      "hiddenIcmp": [],
+      "hiddenServers": [],
+      "orderIcmp": [],
+      "orderServers": [],
+      "assignments": {},
+      "cardSizes": {},
       "widgets": []
     }
   ],
@@ -896,7 +274,8 @@
       "LINK-ARAPIRACA-PEP": "29803894-1678-4438-b2e9-09e8db190c1a",
       "DNSBSB01": "6381baa8-fb2a-4183-a47d-7c7b533c05f0",
       "DNS-SR-AL": "6381baa8-fb2a-4183-a47d-7c7b533c05f0"
-    }
+    },
+    "cardSizes": {}
   },
   "serverLayout": {
     "sections": [
@@ -925,10 +304,11 @@
       "SAL0026-PE-R7525-SNMP": "f2e510fa-1f56-4109-a72f-77906704b443",
       "SAL0016": "f2e510fa-1f56-4109-a72f-77906704b443",
       "SAL0027-PE-R7525-SNMP": "f2e510fa-1f56-4109-a72f-77906704b443"
-    }
+    },
+    "cardSizes": {}
   },
-  "activeDashboardId": "dashboard-c242776a-38c8-43a5-8231-f69a47b1936a",
-  "defaultDashboardId": "dashboard-c242776a-38c8-43a5-8231-f69a47b1936a",
+  "activeDashboardId": "dashboard-f0db445f-b010-4121-9f2a-e17549092ec0",
+  "defaultDashboardId": "dashboard-48a68545-5267-469a-a245-7f84240db2cc",
   "preferences": {
     "autoRefresh": true,
     "refreshSeconds": 30,
@@ -1392,15 +772,15 @@
       "key": "packet-loss:LINK-ARAPIRACA-PEP",
       "hostName": "LINK-ARAPIRACA-PEP",
       "type": "packet_loss",
-      "description": "Perda de pacotes acima do limite: 5.56%",
-      "severity": "critical",
-      "value": 5.56,
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
       "threshold": 1,
-      "status": "active",
+      "status": "resolved",
       "startedAt": "2026-10-15T15:36:33.733Z",
-      "lastOccurrence": "2026-10-15T16:20:28.270Z",
+      "lastOccurrence": "2026-10-15T15:11:46.559Z",
       "acknowledgedAt": null,
-      "resolvedAt": null
+      "resolvedAt": "2026-10-15T15:12:17.021Z"
     },
     {
       "id": "fb98fe6a-56c1-42bb-8ff7-cb72e0b434a9",
@@ -1647,15 +1027,240 @@
       "key": "packet-loss:LINK-BASE-FICCO",
       "hostName": "LINK-BASE-FICCO",
       "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T16:14:39.560Z",
+      "lastOccurrence": "2026-10-15T16:24:27.985Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T16:24:57.979Z"
+    },
+    {
+      "id": "1350ae98-4bc5-447e-acfe-782dd7bff925",
+      "key": "packet-loss:SEI",
+      "hostName": "SEI",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T16:19:58.047Z",
+      "lastOccurrence": "2026-10-15T17:23:05.943Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T17:23:35.211Z"
+    },
+    {
+      "id": "514fee56-6bb4-4ac6-a109-8437cf240b99",
+      "key": "packet-loss:INTRANET",
+      "hostName": "INTRANET",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T16:26:28.201Z",
+      "lastOccurrence": "2026-10-15T17:23:05.943Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T17:23:35.211Z"
+    },
+    {
+      "id": "c708a61f-b739-414d-96f7-99d0abf45f7a",
+      "key": "packet-loss:LINK-BASE-FICCO",
+      "hostName": "LINK-BASE-FICCO",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.13%",
+      "severity": "warning",
+      "value": 1.13,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T17:19:43.541Z",
+      "lastOccurrence": "2026-10-15T17:22:35.051Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T17:23:05.943Z"
+    },
+    {
+      "id": "931bc1c4-b4f6-4fb9-904d-8608d2d63f39",
+      "key": "packet-loss:LINK-MACEIO-PEP",
+      "hostName": "LINK-MACEIO-PEP",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.40%",
+      "severity": "warning",
+      "value": 1.4,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T17:19:43.541Z",
+      "lastOccurrence": "2026-10-15T17:25:34.864Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T17:26:04.911Z"
+    },
+    {
+      "id": "6d82faa8-2383-44b5-ad01-df8a46928023",
+      "key": "packet-loss:AERO-MCZ-PF-AL",
+      "hostName": "AERO-MCZ-PF-AL",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T17:19:43.541Z",
+      "lastOccurrence": "2026-10-15T17:26:04.911Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T17:26:35.309Z"
+    },
+    {
+      "id": "4d1e0458-1269-454c-8cc2-2f369ad526a7",
+      "key": "packet-loss:DNSBSB02",
+      "hostName": "DNSBSB02",
+      "type": "packet_loss",
       "description": "Perda de pacotes acima do limite: 1.67%",
       "severity": "warning",
       "value": 1.67,
       "threshold": 1,
-      "status": "active",
-      "startedAt": "2026-10-15T16:14:39.560Z",
-      "lastOccurrence": "2026-10-15T16:20:28.270Z",
+      "status": "resolved",
+      "startedAt": "2026-10-15T17:19:43.541Z",
+      "lastOccurrence": "2026-10-15T17:31:16.513Z",
       "acknowledgedAt": null,
-      "resolvedAt": null
+      "resolvedAt": "2026-10-15T14:46:59.905Z"
+    },
+    {
+      "id": "39a60ec7-004e-45d6-8746-fd073de9d3bb",
+      "key": "packet-loss:PROXY-BSB",
+      "hostName": "PROXY-BSB",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.67%",
+      "severity": "warning",
+      "value": 1.67,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T17:19:43.541Z",
+      "lastOccurrence": "2026-10-15T17:30:16.431Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T17:30:47.038Z"
+    },
+    {
+      "id": "a4853b47-db0d-4d4a-919b-1aef651a2971",
+      "key": "packet-loss:SINPA",
+      "hostName": "SINPA",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T17:19:43.541Z",
+      "lastOccurrence": "2026-10-15T17:31:16.513Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T14:46:59.905Z"
+    },
+    {
+      "id": "2aa17ff9-380c-446b-8080-14943ff4b64d",
+      "key": "packet-loss:SIGEPOL",
+      "hostName": "SIGEPOL",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.13%",
+      "severity": "warning",
+      "value": 1.13,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T17:19:43.541Z",
+      "lastOccurrence": "2026-10-15T14:50:20.803Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T14:50:52.524Z"
+    },
+    {
+      "id": "dcf14c43-dc33-4de4-835b-83ff591d7582",
+      "key": "packet-loss:CATALOGO-DE-SISTEMAS",
+      "hostName": "CATALOGO-DE-SISTEMAS",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T17:19:43.541Z",
+      "lastOccurrence": "2026-10-15T17:25:34.864Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T17:26:04.911Z"
+    },
+    {
+      "id": "d2e9a77b-15da-4fc7-9b84-22a041f15729",
+      "key": "packet-loss:SISTEMA-REF",
+      "hostName": "SISTEMA-REF",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.13%",
+      "severity": "warning",
+      "value": 1.13,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T17:19:43.541Z",
+      "lastOccurrence": "2026-10-15T17:25:05.032Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T17:25:34.864Z"
+    },
+    {
+      "id": "6b576ad4-a55b-42ff-89ee-497e2196718b",
+      "key": "packet-loss:EPOL",
+      "hostName": "EPOL",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T17:22:13.392Z",
+      "lastOccurrence": "2026-10-15T14:50:52.524Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T14:51:20.795Z"
+    },
+    {
+      "id": "c82f0833-03a2-48e4-8f83-f9909841fc33",
+      "key": "packet-loss:CITSMART",
+      "hostName": "CITSMART",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T17:22:13.392Z",
+      "lastOccurrence": "2026-10-15T17:31:16.513Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T14:46:59.905Z"
+    },
+    {
+      "id": "d0d8f9bb-10a7-4851-99f8-9ce2b3438cbb",
+      "key": "packet-loss:INTRANET",
+      "hostName": "INTRANET",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.13%",
+      "severity": "warning",
+      "value": 1.13,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T17:26:04.911Z",
+      "lastOccurrence": "2026-10-15T14:51:51.045Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T14:52:20.905Z"
+    },
+    {
+      "id": "79787498-8f50-4edd-b989-b702bb433486",
+      "key": "packet-loss:SISTEMA-REF",
+      "hostName": "SISTEMA-REF",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.67%",
+      "severity": "warning",
+      "value": 1.67,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T17:28:16.581Z",
+      "lastOccurrence": "2026-10-15T14:51:51.045Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T14:52:20.905Z"
     }
   ],
   "alertEvents": [
@@ -2330,11 +1935,234 @@
       "action": "opened",
       "message": "Condição anormal persistiu pelo período mínimo configurado.",
       "at": "2026-10-15T16:15:40.377Z"
+    },
+    {
+      "id": "b5829328-9ddd-4439-848e-661cd25216a8",
+      "alertId": "1350ae98-4bc5-447e-acfe-782dd7bff925",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T16:20:58.651Z"
+    },
+    {
+      "id": "28ccd159-ae06-4da6-bbb2-0b4a2c724e3a",
+      "alertId": "79400e7b-075f-4a4d-9f3d-cabf1dc0033d",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T16:24:57.979Z"
+    },
+    {
+      "id": "e7e1e82a-dba4-45e7-8b9c-9924fc1f37ae",
+      "alertId": "514fee56-6bb4-4ac6-a109-8437cf240b99",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:19:43.541Z"
+    },
+    {
+      "id": "acc22bc1-4470-4f00-877e-e57762b4213d",
+      "alertId": "c708a61f-b739-414d-96f7-99d0abf45f7a",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:21:13.560Z"
+    },
+    {
+      "id": "344ac2ad-0592-4178-bcac-2925a118ebdb",
+      "alertId": "931bc1c4-b4f6-4fb9-904d-8608d2d63f39",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:21:13.560Z"
+    },
+    {
+      "id": "00a59413-193c-4bf0-881f-d5000ab256a4",
+      "alertId": "6d82faa8-2383-44b5-ad01-df8a46928023",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:21:13.560Z"
+    },
+    {
+      "id": "816af51a-7444-491f-a42e-399410d5d540",
+      "alertId": "4d1e0458-1269-454c-8cc2-2f369ad526a7",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:21:13.560Z"
+    },
+    {
+      "id": "97c26de7-f17a-4f46-938c-5cc73b764a6a",
+      "alertId": "39a60ec7-004e-45d6-8746-fd073de9d3bb",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:21:13.560Z"
+    },
+    {
+      "id": "197ddf7a-67c2-4e0e-8a3b-f9a5a4848d96",
+      "alertId": "a4853b47-db0d-4d4a-919b-1aef651a2971",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:21:13.560Z"
+    },
+    {
+      "id": "8c9fce98-482a-48e8-8f72-b36d3137cbe2",
+      "alertId": "2aa17ff9-380c-446b-8080-14943ff4b64d",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:21:13.560Z"
+    },
+    {
+      "id": "fb993668-73de-4bf1-84b3-e09ae7c30d3a",
+      "alertId": "dcf14c43-dc33-4de4-835b-83ff591d7582",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:21:13.560Z"
+    },
+    {
+      "id": "1ab00c9f-50f3-4c50-96b7-3e4461d91b29",
+      "alertId": "d2e9a77b-15da-4fc7-9b84-22a041f15729",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:21:13.560Z"
+    },
+    {
+      "id": "686840af-342d-40f7-bcf8-927febcce9e0",
+      "alertId": "c708a61f-b739-414d-96f7-99d0abf45f7a",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T17:23:05.943Z"
+    },
+    {
+      "id": "e1ad9219-e3db-471c-a1e4-67f304b8ab27",
+      "alertId": "6b576ad4-a55b-42ff-89ee-497e2196718b",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:23:35.211Z"
+    },
+    {
+      "id": "677090cd-9b22-430e-8b71-1e100ca6b00e",
+      "alertId": "c82f0833-03a2-48e4-8f83-f9909841fc33",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:23:35.211Z"
+    },
+    {
+      "id": "8a23b819-c707-4fda-b19e-76c1dd778886",
+      "alertId": "1350ae98-4bc5-447e-acfe-782dd7bff925",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T17:23:35.211Z"
+    },
+    {
+      "id": "73ef4150-ac7b-4248-a4ff-d83f6a85ab0c",
+      "alertId": "514fee56-6bb4-4ac6-a109-8437cf240b99",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T17:23:35.211Z"
+    },
+    {
+      "id": "31a36883-1edc-4795-bd38-ec618aa0ee2b",
+      "alertId": "d2e9a77b-15da-4fc7-9b84-22a041f15729",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T17:25:34.864Z"
+    },
+    {
+      "id": "61f8721c-7ed1-4f04-917a-02f6f64861b7",
+      "alertId": "931bc1c4-b4f6-4fb9-904d-8608d2d63f39",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T17:26:04.911Z"
+    },
+    {
+      "id": "310eb9c6-00f2-4ebf-8cb0-e1d8eec5e832",
+      "alertId": "dcf14c43-dc33-4de4-835b-83ff591d7582",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T17:26:04.911Z"
+    },
+    {
+      "id": "2fa6c75a-5d49-4601-b1f4-21bf99f68fd5",
+      "alertId": "6d82faa8-2383-44b5-ad01-df8a46928023",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T17:26:35.309Z"
+    },
+    {
+      "id": "9c8c8caa-211e-4158-a2e0-fb1d2bebca1c",
+      "alertId": "d0d8f9bb-10a7-4851-99f8-9ce2b3438cbb",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:28:46.838Z"
+    },
+    {
+      "id": "62f9d45a-a7d1-4bb4-8ba1-a9f306ae9105",
+      "alertId": "79787498-8f50-4edd-b989-b702bb433486",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T17:30:47.038Z"
+    },
+    {
+      "id": "5f06b4a2-bc14-48b6-bb1a-cc73b6acce80",
+      "alertId": "39a60ec7-004e-45d6-8746-fd073de9d3bb",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T17:30:47.038Z"
+    },
+    {
+      "id": "cdcb08a9-a9d5-4f0e-9f88-b679533d5ceb",
+      "alertId": "4d1e0458-1269-454c-8cc2-2f369ad526a7",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T14:46:59.905Z"
+    },
+    {
+      "id": "62b5452f-c1d0-455f-ace1-14a01f74f54a",
+      "alertId": "a4853b47-db0d-4d4a-919b-1aef651a2971",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T14:46:59.905Z"
+    },
+    {
+      "id": "6c77f995-ad94-46a7-b41a-137994f1e3b5",
+      "alertId": "c82f0833-03a2-48e4-8f83-f9909841fc33",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T14:46:59.905Z"
+    },
+    {
+      "id": "3bad2bb1-9e19-408c-ad93-f3cc75f42b77",
+      "alertId": "2aa17ff9-380c-446b-8080-14943ff4b64d",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T14:50:52.524Z"
+    },
+    {
+      "id": "45bd53d7-933c-49c9-99c1-2bd30e502244",
+      "alertId": "6b576ad4-a55b-42ff-89ee-497e2196718b",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T14:51:20.795Z"
+    },
+    {
+      "id": "708eb587-d5aa-437a-b39d-6809ed677cac",
+      "alertId": "d0d8f9bb-10a7-4851-99f8-9ce2b3438cbb",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T14:52:20.905Z"
+    },
+    {
+      "id": "2a21d6b8-480d-4120-81b1-341025bcf8f7",
+      "alertId": "79787498-8f50-4edd-b989-b702bb433486",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T14:52:20.905Z"
+    },
+    {
+      "id": "48776c18-6458-4725-9983-1ae41f786cbc",
+      "alertId": "21af9394-6ad2-488c-b5f7-9f1df109ad7f",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T15:12:17.021Z"
     }
   ],
   "conditions": {
-    "packet-loss:LINK-ARAPIRACA-PEP": 1792078593733,
-    "packet-loss:LINK-BASE-FICCO": 1792080879560,
-    "packet-loss:SEI": 1792081198047
+    "packet-loss:AERO-MCZ-PF-AL": 1792077167321,
+    "packet-loss:LINK-ARAPIRACA-PEP": 1792077167321
   }
 }

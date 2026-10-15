@@ -9,6 +9,7 @@ export function assertModeratorConfigUpdate(persisted, incoming) {
   }
   if (JSON.stringify(nextConnectivity.hiddenIcmp) !== JSON.stringify(currentConnectivity.hiddenIcmp)
     || currentConnectivity.orderIcmp.some((name) => !nextConnectivity.orderIcmp.includes(name))
+    || JSON.stringify(nextConnectivity.cardSizes) !== JSON.stringify(currentConnectivity.cardSizes)
     || Object.keys(currentConnectivity.assignments).some((name) => !(name in nextConnectivity.assignments))) {
     throw new Error('Moderadores podem adicionar e mover cards de conectividade, mas não removê-los.')
   }
@@ -22,6 +23,7 @@ export function assertModeratorConfigUpdate(persisted, incoming) {
   }
   if (JSON.stringify(nextServers.hiddenServers) !== JSON.stringify(currentServers.hiddenServers)
     || currentServers.orderServers.some((name) => !nextServers.orderServers.includes(name))
+    || JSON.stringify(nextServers.cardSizes) !== JSON.stringify(currentServers.cardSizes)
     || Object.keys(currentServers.assignments).some((name) => !(name in nextServers.assignments))) {
     throw new Error('Moderadores podem adicionar e mover servidores, mas não removê-los.')
   }
@@ -57,6 +59,9 @@ export function assertModeratorConfigUpdate(persisted, incoming) {
     for (const key of ['hiddenIcmp', 'hiddenServers']) {
       if (JSON.stringify(next[key]) !== JSON.stringify(current[key])) {
         throw new Error('Moderadores não podem remover cards.')
+      }
+      if (JSON.stringify(next.cardSizes) !== JSON.stringify(current.cardSizes)) {
+        throw new Error('Moderadores não podem redimensionar os cards existentes.')
       }
     }
     for (const key of ['orderIcmp', 'orderServers']) {

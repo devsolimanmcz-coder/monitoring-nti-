@@ -66,10 +66,18 @@ remover cartões de equipamentos e arrastá-los para reordenar ou mover entre
 seções do mesmo tipo. As seções iniciais são **INFRAESTRUTURA - ATIVOS DE REDE**,
 **APLICAÇÕES PRINCIPAIS PF** e **INFRAESTRUTURA - SERVIDORES**.
 
+Também é possível criar uma seção **Consumo de dados e tráfego** em qualquer
+painel e incluir nela gráficos de itens numéricos do Zabbix. Cada gráfico pode
+acompanhar períodos de 1 hora, 1 dia, 7 dias ou 30 dias (mensal); os períodos
+mais longos são resumidos em até 300 amostras para preservar a leitura do
+histórico sem sobrecarregar o painel.
+
 Painéis novos começam vazios. Em **Adicionar indicador**, selecione primeiro um
 equipamento do Zabbix e depois um de seus itens numéricos; listas grandes são
 carregadas em páginas. Os indicadores podem ser renomeados, redimensionados e
-reorganizados. Taxas de bits, taxas de bytes, quantidades de bytes e durações
+reorganizados. No modo de edição, arraste a alça no canto inferior dos gráficos,
+indicadores e cards de hosts para ajustar largura e altura; o tamanho fica salvo
+no painel. Taxas de bits, taxas de bytes, quantidades de bytes e durações
 são exibidas em unidades legíveis, sem alterar os valores armazenados no Zabbix.
 Os históricos dos indicadores são consultados em lotes para reduzir chamadas à
 API e ao banco de dados.
@@ -86,7 +94,7 @@ O tipo **Mapa** também começa vazio. Seus hosts e gráficos ficam em blocos de
 grade encaixável: arraste para reordenar e use os controles de tamanho para
 ampliar ou reduzir cada bloco. Os nós de host mostram um ícone de equipamento e
 o estado de disponibilidade; gráficos podem combinar até oito séries da mesma
-unidade e oferecem períodos de 15 minutos a 7 dias, escala vertical automática
+unidade e oferecem períodos de 15 minutos a 30 dias, escala vertical automática
 e rótulos de horário.
 
 A configuração compartilhada e as contas ficam, respectivamente, em

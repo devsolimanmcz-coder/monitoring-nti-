@@ -56,6 +56,17 @@ test('rejects replacing an existing widget with a newly added one', () => {
   )
 })
 
+test('prevents moderators from resizing existing cards', () => {
+  const persisted = baseConfig()
+  const incoming = structuredClone(persisted)
+  incoming.dashboards[0].cardSizes = { 'icmp:router': { width: 2, height: 3 } }
+
+  assert.throws(
+    () => assertModeratorConfigUpdate(persisted, incoming),
+    /não podem redimensionar os cards existentes/,
+  )
+})
+
 test('prevents moderators from removing connectivity sections or hosts', () => {
   const persisted = baseConfig()
   persisted.connectivityLayout.sections = [{ id: 'links', title: 'Links', kind: 'icmp' }]

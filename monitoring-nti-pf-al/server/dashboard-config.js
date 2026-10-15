@@ -22,6 +22,7 @@ const defaultDashboard = () => ({
   orderIcmp: [],
   orderServers: [],
   assignments: {},
+  cardSizes: {},
   widgets: [],
 })
 
@@ -30,6 +31,7 @@ const defaultConnectivityLayout = () => ({
   hiddenIcmp: [],
   orderIcmp: [],
   assignments: {},
+  cardSizes: {},
 })
 
 const defaultServerLayout = () => ({
@@ -37,6 +39,7 @@ const defaultServerLayout = () => ({
   hiddenServers: [],
   orderServers: [],
   assignments: {},
+  cardSizes: {},
 })
 
 export const DEFAULT_DASHBOARD_CONFIG = {
@@ -68,8 +71,23 @@ export const DEFAULT_DASHBOARD_CONFIG = {
   conditions: {},
 }
 
-const allowedKinds = new Set(['icmp', 'servers'])
+const allowedKinds = new Set(['icmp', 'servers', 'consumption'])
 const allowedWidgets = new Set(['metric', 'timeseries', 'availability', 'gauge', 'table', 'icmp', 'server', 'alerts'])
+
+function normalizeCardSizes(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key, size]) => key.length <= 264
+      && size
+      && Number.isInteger(Number(size.width))
+      && Number(size.width) >= 1
+      && Number(size.width) <= 4
+      && Number.isInteger(Number(size.height))
+      && Number(size.height) >= 1
+      && Number(size.height) <= 8)
+    .slice(0, 1000)
+    .map(([key, size]) => [key, { width: Number(size.width), height: Number(size.height) }]))
+}
 
 function normalizeDashboard(dashboard) {
   if (!dashboard || !Array.isArray(dashboard.sections) || !Array.isArray(dashboard.widgets)) {
@@ -111,7 +129,7 @@ function normalizeDashboard(dashboard) {
       throw new Error('Cada indicador deve ter de 1 a 8 itens válidos; disponibilidade aceita apenas um item.')
     }
     const range = widget.range || '1h'
-    if (!['15m', '1h', '6h', '24h', '7d'].includes(range)) {
+    if (!['15m', '1h', '6h', '24h', '7d', '30d'].includes(range)) {
       throw new Error('Período de histórico inválido para o indicador.')
     }
     const mapSizePx = Number(widget.mapSizePx ?? 80)
@@ -150,10 +168,16 @@ function normalizeDashboard(dashboard) {
         unit: typeof item.unit === 'string' ? item.unit.slice(0, 40) : '',
       }))
     if (items.length !== itemIds.length) throw new Error('Metadados inválidos para os itens do indicador.')
+    const sectionId = typeof widget.sectionId === 'string' ? widget.sectionId : ''
+    const section = sections.find((item) => item.id === sectionId)
+    if (widget.sectionId !== undefined && (!sectionId || section?.kind !== 'consumption')) {
+      throw new Error('Indicadores só podem ser associados a seções de consumo válidas.')
+    }
     return {
       id: widget.id.slice(0, 80),
       title: widget.title.trim(),
       type: widget.type,
+      ...(sectionId ? { sectionId } : {}),
       range,
       itemId: Number(widget.itemId),
       itemIds,
@@ -163,6 +187,9 @@ function normalizeDashboard(dashboard) {
       itemName: typeof widget.itemName === 'string' ? widget.itemName.slice(0, 255) : '',
       unit: typeof widget.unit === 'string' ? widget.unit.slice(0, 40) : '',
       width: [1, 2, 3, 4].includes(Number(widget.width)) ? Number(widget.width) : 1,
+      height: Number.isInteger(Number(widget.height)) && Number(widget.height) >= 1 && Number(widget.height) <= 8
+        ? Number(widget.height)
+        : widget.type === 'timeseries' ? 2 : 1,
       mapSizePx,
       mapCols,
       mapRows,
@@ -196,6 +223,7 @@ function normalizeDashboard(dashboard) {
     orderIcmp: normalizeNames(dashboard.orderIcmp, 'orderIcmp'),
     orderServers: normalizeNames(dashboard.orderServers, 'orderServers'),
     assignments,
+    cardSizes: normalizeCardSizes(dashboard.cardSizes),
     widgets,
   }
 }
@@ -232,6 +260,7 @@ function normalizeConnectivityLayout(layout = {}) {
     hiddenIcmp: normalizeNames(layout.hiddenIcmp ?? [], 'hiddenIcmp'),
     orderIcmp: normalizeNames(layout.orderIcmp ?? [], 'orderIcmp'),
     assignments,
+    cardSizes: normalizeCardSizes(layout.cardSizes),
   }
 }
 
@@ -267,6 +296,7 @@ function normalizeServerLayout(layout = {}) {
     hiddenServers: normalizeNames(layout.hiddenServers ?? [], 'hiddenServers'),
     orderServers: normalizeNames(layout.orderServers ?? [], 'orderServers'),
     assignments,
+    cardSizes: normalizeCardSizes(layout.cardSizes),
   }
 }
 
