@@ -117,7 +117,7 @@ function alertEventLabel(action) {
   return { opened: 'Alerta aberto', resolved: 'Alerta resolvido', acknowledged: 'Alerta reconhecido' }[action] || action
 }
 
-function IcmpCard({ host, editMode, onRemove, onDragStart, onDragOver, onDrop }) {
+function IcmpCard({ host, editMode, canDelete, onRemove, onDragStart, onDragOver, onDrop }) {
   return (
     <article
       className={`icmp-card ${editMode ? 'card-editable' : ''}`}
@@ -126,7 +126,7 @@ function IcmpCard({ host, editMode, onRemove, onDragStart, onDragOver, onDrop })
       onDragOver={onDragOver}
       onDrop={(event) => onDrop(event, 'icmp', host.host_name)}
     >
-      {editMode && <button className="card-remove" type="button" aria-label={`Remover ${host.host_name}`} onClick={() => onRemove('icmp', host.host_name)}><Icon name="close" size={13} /></button>}
+      {editMode && canDelete && <button className="card-remove" type="button" aria-label={`Remover ${host.host_name}`} onClick={() => onRemove('icmp', host.host_name)}><Icon name="close" size={13} /></button>}
       <div className="icmp-card-header">
         <div className="host-mark"><Icon name="network" size={17} /></div>
         <div className="host-heading">
@@ -172,7 +172,7 @@ function ResourceBar({ label, value, detail, color }) {
   )
 }
 
-function ServerCard({ server, editMode, onRemove, onDragStart, onDragOver, onDrop }) {
+function ServerCard({ server, editMode, canDelete, onRemove, onDragStart, onDragOver, onDrop }) {
   return (
     <article
       className={`server-card ${editMode ? 'card-editable' : ''}`}
@@ -181,7 +181,7 @@ function ServerCard({ server, editMode, onRemove, onDragStart, onDragOver, onDro
       onDragOver={onDragOver}
       onDrop={(event) => onDrop(event, 'servers', server.host_name)}
     >
-      {editMode && <button className="card-remove" type="button" aria-label={`Remover ${server.host_name}`} onClick={() => onRemove('servers', server.host_name)}><Icon name="close" size={13} /></button>}
+      {editMode && canDelete && <button className="card-remove" type="button" aria-label={`Remover ${server.host_name}`} onClick={() => onRemove('servers', server.host_name)}><Icon name="close" size={13} /></button>}
       <div className="server-header">
         <div className="server-mark"><Icon name="server" size={18} /></div>
         <div className="server-heading">
@@ -620,7 +620,251 @@ function DashboardCreateDialog({ onClose, onCreate }) {
   )
 }
 
+const ROLE_LABELS = {
+  administrator: 'Administrator · acesso total',
+  moderator: 'Moderador · adiciona e move',
+  view: 'Visualizador · painéis atribuídos',
+}
+
+function LoginScreen({ onLogin, loading, error }) {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+
+  function submit(event) {
+    event.preventDefault()
+    onLogin(username, password)
+  }
+
+  return (
+    <main className="login-screen">
+      <div className="login-glow" />
+      <form className="login-card" onSubmit={submit}>
+        <div className="brand login-brand"><span className="brand-symbol"><Icon name="activity" size={21} /></span><span className="brand-name">NTIBIX<small>MONITORAMENTO E OBSERVABILIDADE</small></span></div>
+        <div className="eyebrow"><span className="eyebrow-line" />ACESSO SEGURO · NTI</div>
+        <h1>Bem-vindo de volta</h1>
+        <p>Entre para acessar os painéis de monitoramento.</p>
+        <label className="dialog-field"><span>Usuário</span><input autoComplete="username" autoFocus value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Seu usuário" required /></label>
+        <label className="dialog-field"><span>Senha</span><input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Sua senha" required /></label>
+        {error && <p className="dialog-error" role="alert">{error}</p>}
+        <button className="dialog-submit login-submit" type="submit" disabled={loading}>{loading ? 'Entrando...' : 'Entrar'}</button>
+        <small className="login-footnote">Acesso monitorado · NTIBIX</small>
+      </form>
+    </main>
+  )
+}
+
+function UnauthorizedScreen({ onLoginRoute, noAssignedDashboards = false, onLogout }) {
+  useEffect(() => {
+    if (noAssignedDashboards) return undefined
+    const timeout = window.setTimeout(onLoginRoute, 1400)
+    return () => window.clearTimeout(timeout)
+  }, [noAssignedDashboards, onLoginRoute])
+
+  return (
+    <main className="login-screen">
+      <section className="login-card unauthorized-card" role="status">
+        <span className="unauthorized-icon"><Icon name="shield" size={24} /></span>
+        <div className="eyebrow"><span className="eyebrow-line" />ACESSO PROTEGIDO · NTI</div>
+        <h1>{noAssignedDashboards ? 'Acesso ainda não atribuído' : 'Acesso não autorizado'}</h1>
+        <p>{noAssignedDashboards
+          ? 'Sua conta está ativa, mas ainda não tem painéis atribuídos. Peça ao administrador que configure seu acesso.'
+          : 'Você precisa entrar para acessar esta página. Redirecionando para o login…'}</p>
+        {noAssignedDashboards
+          ? <button className="edit-panel-button" type="button" onClick={onLogout}>Sair</button>
+          : <button className="edit-panel-button" type="button" onClick={onLoginRoute}>Ir para o login</button>}
+      </section>
+    </main>
+  )
+}
+
+function UserAdministration({ dashboards, currentUser }) {
+  const [users, setUsers] = useState([])
+  const [drafts, setDrafts] = useState({})
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [role, setRole] = useState('view')
+  const [dashboardIds, setDashboardIds] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const fetchUsers = useCallback(async (signal) => {
+    const response = await fetch('/api/users', { signal })
+    const payload = await response.json()
+    if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar os usuários.')
+    return payload
+  }, [])
+
+  const loadUsers = useCallback(async () => {
+    try {
+      const payload = await fetchUsers()
+      setUsers(payload)
+      setDrafts(Object.fromEntries(payload.map((user) => [user.id, {
+        role: user.role,
+        dashboardIds: user.dashboardIds,
+        password: '',
+      }])))
+      setError('')
+    } catch (requestError) {
+      setError(requestError.message || 'Não foi possível carregar os usuários.')
+    } finally { setLoading(false) }
+  }, [fetchUsers])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchUsers(controller.signal)
+      .then((payload) => {
+        if (controller.signal.aborted) return
+        setUsers(payload)
+        setDrafts(Object.fromEntries(payload.map((user) => [user.id, {
+          role: user.role,
+          dashboardIds: user.dashboardIds,
+          password: '',
+        }])))
+      })
+      .catch((requestError) => {
+        if (requestError.name !== 'AbortError') setError(requestError.message)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+    return () => controller.abort()
+  }, [fetchUsers])
+
+  const toggleDashboard = (ids, targetId) => ids.includes(targetId)
+    ? ids.filter((id) => id !== targetId)
+    : [...ids, targetId]
+
+  async function createUser(event) {
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, role, dashboardIds: role === 'view' ? dashboardIds : [] }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível criar o usuário.')
+      setUsername('')
+      setPassword('')
+      setDashboardIds([])
+      setNotice(`Usuário ${payload.username} criado.`)
+      await loadUsers()
+    } catch (requestError) {
+      setError(requestError.message || 'Não foi possível criar o usuário.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function saveUser(user) {
+    const draft = drafts[user.id]
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(user.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: draft.role,
+          dashboardIds: draft.dashboardIds,
+          password: draft.password,
+        }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível salvar o usuário.')
+      setNotice(`Permissões de ${payload.username} atualizadas.`)
+      await loadUsers()
+    } catch (requestError) {
+      setError(requestError.message || 'Não foi possível salvar o usuário.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deleteUser(user) {
+    if (!window.confirm(`Excluir o usuário ${user.username}?`)) return
+    setSaving(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(user.id)}`, { method: 'DELETE' })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível excluir o usuário.')
+      setNotice(`Usuário ${user.username} excluído.`)
+      await loadUsers()
+    } catch (requestError) {
+      setError(requestError.message || 'Não foi possível excluir o usuário.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function setUserDisabled(user, disabled) {
+    setSaving(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(user.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ disabled }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível alterar o estado do usuário.')
+      setNotice(`Conta ${payload.disabled ? 'desativada' : 'ativada'}: ${payload.username}.`)
+      await loadUsers()
+    } catch (requestError) {
+      setError(requestError.message || 'Não foi possível alterar o usuário.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="content-section user-admin">
+      <div className="user-admin-intro"><div><h2>Contas e grupos de acesso</h2><p>Controle quem pode administrar, organizar ou apenas visualizar cada painel.</p></div><span className="user-admin-badge">{users.length} usuários</span></div>
+      {error && <div className="error-banner" role="alert"><Icon name="alert" size={17} /><span>{error}</span></div>}
+      {notice && <p className="user-admin-notice" role="status">{notice}</p>}
+      <form className="user-create-form" onSubmit={createUser}>
+        <h3>Criar usuário</h3>
+        <div className="user-create-fields">
+          <label className="dialog-field"><span>Nome de usuário</span><input minLength="3" maxLength="40" autoComplete="off" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="ex.: operador-01" required /></label>
+          <label className="dialog-field"><span>Senha inicial · mínimo 12 caracteres</span><input type="password" minLength="12" maxLength="200" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
+          <label className="dialog-field"><span>Grupo</span><select value={role} onChange={(event) => { setRole(event.target.value); setDashboardIds([]) }}>{Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        </div>
+        {role === 'view' && <fieldset className="dashboard-permissions"><legend>Painéis que este usuário poderá visualizar</legend>{dashboards.map((dashboard) => <label key={dashboard.id}><input type="checkbox" checked={dashboardIds.includes(dashboard.id)} onChange={() => setDashboardIds((current) => toggleDashboard(current, dashboard.id))} />{dashboard.title}</label>)}</fieldset>}
+        <button className="edit-panel-button" type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Criar usuário'}</button>
+      </form>
+      <div className="user-list">
+        {loading ? <div className="loading-banner"><span className="loading-spinner" /><div><strong>Carregando usuários</strong></div></div> : users.map((user) => {
+          const draft = drafts[user.id] || { role: user.role, dashboardIds: user.dashboardIds, password: '' }
+          const isSelf = user.id === currentUser.id
+          return (
+            <article className="user-row" key={user.id}>
+              <div className="user-row-heading"><span className={`user-state ${user.disabled ? 'disabled' : ''}`} /><div><strong>{user.username}</strong><small>{user.disabled ? 'Conta desativada' : ROLE_LABELS[user.role]}</small></div>{isSelf && <span className="user-self-tag">Sua conta</span>}</div>
+              <div className="user-row-edit">
+                <label className="dialog-field"><span>Grupo</span><select value={draft.role} disabled={isSelf} onChange={(event) => setDrafts((current) => ({ ...current, [user.id]: { ...current[user.id], role: event.target.value, dashboardIds: event.target.value === 'view' ? current[user.id].dashboardIds : [] } }))}>{Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                <label className="dialog-field"><span>Redefinir senha (opcional)</span><input type="password" minLength="12" maxLength="200" autoComplete="new-password" value={draft.password} placeholder="Mínimo 12 caracteres" onChange={(event) => setDrafts((current) => ({ ...current, [user.id]: { ...current[user.id], password: event.target.value } }))} /></label>
+              </div>
+              {draft.role === 'view' && <fieldset className="dashboard-permissions"><legend>Painéis atribuídos</legend>{dashboards.map((dashboard) => <label key={dashboard.id}><input type="checkbox" checked={draft.dashboardIds.includes(dashboard.id)} onChange={() => setDrafts((current) => ({ ...current, [user.id]: { ...current[user.id], dashboardIds: toggleDashboard(current[user.id].dashboardIds, dashboard.id) } }))} />{dashboard.title}</label>)}</fieldset>}
+              <div className="user-row-actions"><button className="edit-panel-button" type="button" disabled={saving} onClick={() => saveUser(user)}>Salvar permissões</button>{!isSelf && <><button className="section-action" type="button" disabled={saving} onClick={() => setUserDisabled(user, !user.disabled)}>{user.disabled ? 'Ativar conta' : 'Desativar conta'}</button><button className="section-action section-delete" type="button" disabled={saving} onClick={() => deleteUser(user)} aria-label={`Excluir ${user.username}`}><Icon name="trash" size={14} /></button></>}</div>
+            </article>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 function App() {
+  const [authUser, setAuthUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [loginLoading, setLoginLoading] = useState(false)
+  const [authError, setAuthError] = useState('')
   const [dashboard, setDashboard] = useState({ icmp: [], servers: [], alerts: [], updatedAt: null })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -648,6 +892,8 @@ function App() {
   const configSaveQueue = useRef(Promise.resolve())
   const saveRevision = useRef(0)
   const lastPersistedSnapshot = useRef('')
+  const isAdministrator = authUser?.role === 'administrator'
+  const canEditDashboard = authUser?.role === 'administrator' || authUser?.role === 'moderator'
 
   const refreshSeconds = config?.preferences?.refreshSeconds || 30
   const autoRefresh = config?.preferences?.autoRefresh !== false
@@ -662,6 +908,7 @@ function App() {
   )
 
   const loadDashboard = useCallback(async (signal) => {
+    if (!authUser) return
     try {
       const response = await fetch('/api/dashboard', { signal })
       const payload = await response.json()
@@ -679,7 +926,66 @@ function App() {
     } finally {
       if (!signal?.aborted) setLoading(false)
     }
+  }, [authUser])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/auth/me', { signal: controller.signal })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload.error || 'Sua sessão não está autenticada.')
+        setAuthUser(payload.user)
+      })
+      .catch((requestError) => {
+        if (requestError.name !== 'AbortError') {
+          setAuthUser(null)
+          if (!['#/login', '#/unauthorized'].includes(window.location.hash.split('?')[0])) {
+            window.location.hash = '#/unauthorized'
+          }
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setAuthLoading(false)
+      })
+    return () => controller.abort()
   }, [])
+
+  const handleLogin = async (username, password) => {
+    setLoginLoading(true)
+    setAuthError('')
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível entrar.')
+      setAuthUser(payload.user)
+      const nextRoute = payload.user.role === 'view'
+        ? payload.user.dashboardIds[0] ? `#/dashboard/${payload.user.dashboardIds[0]}` : '#/unauthorized'
+        : '#/overview'
+      window.location.hash = nextRoute
+    } catch (requestError) {
+      setAuthError(requestError.message || 'Não foi possível entrar.')
+    } finally {
+      setLoginLoading(false)
+    }
+  }
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch (requestError) {
+      console.error('Falha ao encerrar a sessão no servidor:', requestError)
+    } finally {
+      setAuthUser(null)
+      setConfig(null)
+      setLayoutLoaded(false)
+      window.location.hash = '#/unauthorized'
+    }
+  }, [])
+  const goToLogin = useCallback(() => { window.location.hash = '#/login' }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -699,10 +1005,10 @@ function App() {
       window.clearTimeout(initialLoad)
       if (interval) window.clearInterval(interval)
     }
-  }, [autoRefresh, refreshSeconds, loadDashboard])
+  }, [authUser, autoRefresh, refreshSeconds, loadDashboard])
 
   useEffect(() => {
-    if (page !== 'dashboard' || !widgetItemIdsKey) return undefined
+    if (!authUser || page !== 'dashboard' || !widgetItemIdsKey) return undefined
     const itemsByRange = JSON.parse(widgetItemIdsKey)
     const itemKeys = Object.entries(itemsByRange).flatMap(([range, itemIds]) => itemIds.map((itemId) => `${range}:${itemId}`))
     let active = true
@@ -765,9 +1071,10 @@ function App() {
       controller?.abort()
       window.clearInterval(interval)
     }
-  }, [autoRefresh, page, refreshSeconds, widgetItemIdsKey])
+  }, [authUser, autoRefresh, page, refreshSeconds, widgetItemIdsKey])
 
   useEffect(() => {
+    if (!authUser) return undefined
     const controller = new AbortController()
     fetch('/api/dashboard-config', { signal: controller.signal })
       .then(async (response) => {
@@ -804,10 +1111,10 @@ function App() {
         }
       })
     return () => controller.abort()
-  }, [])
+  }, [authUser])
 
   useEffect(() => {
-    if (!layoutLoaded || !config) return undefined
+    if (!authUser || authUser.role === 'view' || !layoutLoaded || !config) return undefined
     const revision = ++saveRevision.current
     const persistedConfig = {
       ...config,
@@ -851,7 +1158,7 @@ function App() {
         })
     }, 250)
     return () => window.clearTimeout(timeout)
-  }, [layout, config, layoutLoaded])
+  }, [authUser, layout, config, layoutLoaded])
 
   useEffect(() => {
     if (saveNotice?.type !== 'success') return undefined
@@ -862,18 +1169,75 @@ function App() {
   useEffect(() => {
     const onHashChange = () => {
       const [nextPage, dashboardId] = window.location.hash.slice(2).split('/')
+      if (!authUser) {
+        if (nextPage !== 'login' && nextPage !== 'unauthorized') {
+          window.location.hash = '#/unauthorized'
+          return
+        }
+        setPage(nextPage || 'login')
+        return
+      }
+      if (authUser.role === 'view') {
+        if (nextPage === 'login' || nextPage === 'unauthorized') return
+        if (nextPage !== 'dashboard' && nextPage !== 'dashboards') {
+          window.location.hash = authUser.dashboardIds[0]
+            ? `#/dashboard/${authUser.dashboardIds[0]}`
+            : '#/unauthorized?reason=no-dashboard'
+          return
+        }
+      }
       setPage(nextPage || 'overview')
       if (dashboardId && config) {
         const selected = config.dashboards.find((item) => item.id === dashboardId)
         if (selected) {
           setLayout(selected)
           setConfig((current) => ({ ...current, activeDashboardId: selected.id }))
+        } else if (authUser.role === 'view') {
+          window.location.hash = authUser.dashboardIds[0]
+            ? `#/dashboard/${authUser.dashboardIds[0]}`
+            : '#/unauthorized?reason=no-dashboard'
         }
       }
     }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
-  }, [config])
+  }, [authUser, config])
+
+  useEffect(() => {
+    if (!authUser) return
+    if (authUser.role === 'view' && !authUser.dashboardIds.length) {
+      if (!window.location.hash.includes('reason=no-dashboard')) window.location.hash = '#/unauthorized?reason=no-dashboard'
+      return
+    }
+    if (page === 'login' || page === 'unauthorized') {
+      window.location.hash = authUser.role === 'view'
+        ? `#/dashboard/${authUser.dashboardIds[0]}`
+        : '#/overview'
+      return
+    }
+    if (authUser.role === 'view' && !['dashboard', 'dashboards'].includes(page)) {
+      window.location.hash = `#/dashboard/${authUser.dashboardIds[0]}`
+      return
+    }
+    if (page === 'users' && !isAdministrator) window.location.hash = '#/overview'
+    if (page === 'settings' && !isAdministrator) window.location.hash = '#/overview'
+  }, [authUser, isAdministrator, page])
+
+  useEffect(() => {
+    if (!authUser) return undefined
+    const interval = window.setInterval(async () => {
+      try {
+        const response = await fetch('/api/auth/me')
+        if (response.status === 401) {
+          setAuthUser(null)
+          window.location.hash = '#/unauthorized'
+        }
+      } catch (requestError) {
+        console.error('Falha ao validar a sessão:', requestError)
+      }
+    }, 60_000)
+    return () => window.clearInterval(interval)
+  }, [authUser])
 
   useEffect(() => {
     if (!kioskMode || kioskPaused || !config?.preferences.kiosk.rotationEnabled) return undefined
@@ -1240,6 +1604,7 @@ function App() {
     servers: ['Servidores', 'Recursos de CPU, memória e armazenamento disponíveis no Zabbix.'],
     alerts: ['Central de alertas', 'Incidentes ativos, reconhecidos e resolvidos com histórico.'],
     settings: ['Configurações', 'Atualização, apresentação e limites de detecção de anomalias.'],
+    users: ['Usuários', 'Contas, grupos e acesso individual aos painéis.'],
   }
   const [headingTitle, headingDescription] = pageHeadings[page] || pageHeadings.overview
   const averageLatency = dashboard.icmp.length
@@ -1254,28 +1619,45 @@ function App() {
     : 'aguardando dados'
   const dataIsStale = Boolean(error || (lastUpdated && clockNow - lastUpdated.getTime() > refreshSeconds * 2000))
 
+  if (authLoading) {
+    return <main className="login-screen"><div className="loading-banner"><span className="loading-spinner" /><div><strong>Verificando acesso</strong><span>Validando sua sessão segura…</span></div></div></main>
+  }
+  if (!authUser) {
+    return window.location.hash.startsWith('#/login')
+      ? <LoginScreen onLogin={handleLogin} loading={loginLoading} error={authError} />
+      : <UnauthorizedScreen onLoginRoute={goToLogin} />
+  }
+  if (authUser.role === 'view' && authUser.dashboardIds.length === 0) {
+    return <UnauthorizedScreen noAssignedDashboards onLogout={handleLogout} />
+  }
+
   return (
     <div className={`app-shell ${kioskMode ? 'kiosk-mode' : ''} ${sidebarHidden ? 'sidebar-hidden' : ''}`}>
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <aside className="sidebar">
-        <a className="brand" href="#/overview" aria-label="NTI Pulse - início">
+        <a className="brand" href="#/overview" aria-label="NTIBIX - início">
           <span className="brand-symbol"><Icon name="activity" size={21} /></span>
-          <span className="brand-name">nti<span>pulse</span><small>INFRAESTRUTURA</small></span>
+          <span className="brand-name">NTIBIX<small>MONITORAMENTO E OBSERVABILIDADE</small></span>
         </a>
 
         <div className="nav-label">MONITORAMENTO</div>
         <nav className="main-nav" aria-label="Navegação principal">
-          <a className={`nav-link ${page === 'overview' ? 'active' : ''}`} href="#/overview"><Icon name="dashboard" /><span>Visão geral</span><span className="nav-active-mark" /></a>
+          {authUser.role !== 'view' && <a className={`nav-link ${page === 'overview' ? 'active' : ''}`} href="#/overview"><Icon name="dashboard" /><span>Visão geral</span><span className="nav-active-mark" /></a>}
           <a className={`nav-link ${page === 'dashboards' || page === 'dashboard' ? 'active' : ''}`} href="#/dashboards"><Icon name="dashboard" /><span>Painéis</span><span className="nav-count">{config?.dashboards.length ?? '—'}</span></a>
-          <a className={`nav-link ${page === 'connectivity' ? 'active' : ''}`} href="#/connectivity"><Icon name="network" /><span>Conectividade</span><span className="nav-count">{dashboard.icmp.length || '—'}</span></a>
-          <a className={`nav-link ${page === 'servers' ? 'active' : ''}`} href="#/servers"><Icon name="server" /><span>Servidores</span><span className="nav-count">{dashboard.servers.length || '—'}</span></a>
-          <a className={`nav-link ${page === 'alerts' ? 'active' : ''}`} href="#/alerts"><Icon name="alert" /><span>Alertas</span><span className="nav-count">{dashboard.alerts.filter((item) => item.status !== 'resolved').length || '0'}</span></a>
+          {authUser.role !== 'view' && <>
+            <a className={`nav-link ${page === 'connectivity' ? 'active' : ''}`} href="#/connectivity"><Icon name="network" /><span>Conectividade</span><span className="nav-count">{dashboard.icmp.length || '—'}</span></a>
+            <a className={`nav-link ${page === 'servers' ? 'active' : ''}`} href="#/servers"><Icon name="server" /><span>Servidores</span><span className="nav-count">{dashboard.servers.length || '—'}</span></a>
+            <a className={`nav-link ${page === 'alerts' ? 'active' : ''}`} href="#/alerts"><Icon name="alert" /><span>Alertas</span><span className="nav-count">{dashboard.alerts.filter((item) => item.status !== 'resolved').length || '0'}</span></a>
+          </>}
         </nav>
-        <div className="nav-label nav-label-secondary">PREFERÊNCIAS</div>
-        <nav className="main-nav" aria-label="Preferências">
-          <a className={`nav-link ${page === 'settings' ? 'active' : ''}`} href="#/settings"><Icon name="edit" /><span>Configurações</span></a>
-        </nav>
+        {isAdministrator && <>
+          <div className="nav-label nav-label-secondary">PREFERÊNCIAS</div>
+          <nav className="main-nav" aria-label="Preferências">
+            <a className={`nav-link ${page === 'settings' ? 'active' : ''}`} href="#/settings"><Icon name="edit" /><span>Configurações</span></a>
+            <a className={`nav-link ${page === 'users' ? 'active' : ''}`} href="#/users"><Icon name="shield" /><span>Usuários e acesso</span></a>
+          </nav>
+        </>}
 
         <div className="sidebar-bottom">
           <div className="sidebar-status">
@@ -1301,7 +1683,8 @@ function App() {
             <div className={`update-info ${dataIsStale ? 'is-stale' : ''}`}><span className={`pulse-dot ${error ? 'is-error' : ''}`} /><span>{dataIsStale ? 'Dados desatualizados' : 'Atualizado'} <strong>{updatedLabel}</strong></span></div>
             <button className="icon-button" type="button" aria-label="Atualizar agora" onClick={() => loadDashboard()}><Icon name="refresh" size={17} /></button>
             {kioskMode && <button className="icon-button" type="button" onClick={() => setKioskPaused((value) => !value)} aria-label={kioskPaused ? 'Retomar rotação' : 'Pausar rotação'}>{kioskPaused ? '▶' : 'Ⅱ'}</button>}
-            <div className="user-avatar" aria-label="Equipe NTI">NTI</div>
+            <span className="user-role-label">{ROLE_LABELS[authUser.role]?.split(' · ')[0]}</span>
+            <button className="user-avatar" type="button" aria-label={`Sair da conta ${authUser.username}`} title={`Sair · ${authUser.username}`} onClick={handleLogout}>{authUser.username.slice(0, 2).toUpperCase()}</button>
           </div>
         </header>
 
@@ -1314,13 +1697,13 @@ function App() {
             </div>
             <div className="heading-actions">
               <div className="refresh-chip"><Icon name="clock" size={15} /><span>{autoRefresh ? 'Atualização automática' : 'Atualização pausada'}</span><strong>{refreshSeconds >= 60 ? `${refreshSeconds / 60}min` : `${refreshSeconds}s`}</strong></div>
-              {page === 'dashboards' && <button className="edit-panel-button" type="button" onClick={() => setDashboardCreateOpen(true)}><Icon name="plus" size={15} />Novo painel</button>}
+              {page === 'dashboards' && isAdministrator && <button className="edit-panel-button" type="button" onClick={() => setDashboardCreateOpen(true)}><Icon name="plus" size={15} />Novo painel</button>}
               {page === 'dashboard' && <button className="edit-panel-button" type="button" onClick={() => setWidgetDialog({})}><Icon name="plus" size={15} />{['network', 'topology'].includes(layout.type) ? 'Adicionar host ou gráfico' : 'Adicionar indicador'}</button>}
               {(page === 'overview' || page === 'dashboard' || page === 'connectivity' || page === 'servers') && <>
-                {editMode && <button className="edit-panel-button" type="button" onClick={() => setSectionDialog({ mode: 'create', title: '', kind: 'icmp' })}><Icon name="plus" size={15} />Nova seção</button>}
-                <button className={`edit-panel-button ${editMode ? 'is-editing' : ''}`} type="button" onClick={() => setEditMode((value) => !value)}>
+                {editMode && canEditDashboard && <button className="edit-panel-button" type="button" onClick={() => setSectionDialog({ mode: 'create', title: '', kind: 'icmp' })}><Icon name="plus" size={15} />Nova seção</button>}
+                {canEditDashboard && <button className={`edit-panel-button ${editMode ? 'is-editing' : ''}`} type="button" onClick={() => setEditMode((value) => !value)}>
                   <Icon name={editMode ? 'check' : 'edit'} size={15} />{editMode ? 'Concluir' : 'Editar painel'}
-                </button>
+                </button>}
               </>}
               {!kioskMode && <button className="edit-panel-button" type="button" onClick={async () => {
                 try {
@@ -1387,12 +1770,14 @@ function App() {
                   <div className="dashboard-tile-icon"><Icon name="dashboard" size={21} /></div>
                   <div className="dashboard-tile-copy"><span>{item.type === 'topology' ? 'Mapa · ' : item.type === 'network' ? 'Rede · ' : ''}{item.widgets.length} indicadores · {item.sections.length} seções{item.id === config.defaultDashboardId ? ' · Inicial' : ''}</span><h3>{item.title}</h3><small>Endereço: #/dashboard/{item.id}</small></div>
                   <div className="dashboard-tile-actions">
-                    <button className={`section-action ${item.favorite ? 'is-favorite' : ''}`} type="button" title={item.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'} aria-label={item.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'} aria-pressed={item.favorite} onClick={() => toggleFavorite(item)}>★</button>
                     <a className="edit-panel-button" href={`#/dashboard/${item.id}`}>Abrir</a>
-                    <button className={`section-action ${item.id === config.defaultDashboardId ? 'is-favorite' : ''}`} type="button" title={item.id === config.defaultDashboardId ? 'Painel inicial' : 'Definir como painel inicial'} aria-label={item.id === config.defaultDashboardId ? 'Painel inicial selecionado' : 'Definir como painel inicial'} aria-pressed={item.id === config.defaultDashboardId} disabled={item.id === config.defaultDashboardId} onClick={() => setDefaultDashboard(item)}><Icon name="home" size={13} /></button>
-                    <button className="section-action" type="button" aria-label="Renomear painel" onClick={() => renameDashboard(item)}><Icon name="edit" size={13} /></button>
-                    <button className="section-action" type="button" aria-label="Duplicar painel" onClick={() => duplicateDashboard(item)}><Icon name="plus" size={13} /></button>
-                    <button className="section-action section-delete" type="button" aria-label="Excluir painel" onClick={() => deleteDashboard(item)}><Icon name="trash" size={13} /></button>
+                    {isAdministrator && <>
+                      <button className={`section-action ${item.favorite ? 'is-favorite' : ''}`} type="button" title={item.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'} aria-label={item.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'} aria-pressed={item.favorite} onClick={() => toggleFavorite(item)}>★</button>
+                      <button className={`section-action ${item.id === config.defaultDashboardId ? 'is-favorite' : ''}`} type="button" title={item.id === config.defaultDashboardId ? 'Painel inicial' : 'Definir como painel inicial'} aria-label={item.id === config.defaultDashboardId ? 'Painel inicial selecionado' : 'Definir como painel inicial'} aria-pressed={item.id === config.defaultDashboardId} disabled={item.id === config.defaultDashboardId} onClick={() => setDefaultDashboard(item)}><Icon name="home" size={13} /></button>
+                      <button className="section-action" type="button" aria-label="Renomear painel" onClick={() => renameDashboard(item)}><Icon name="edit" size={13} /></button>
+                      <button className="section-action" type="button" aria-label="Duplicar painel" onClick={() => duplicateDashboard(item)}><Icon name="plus" size={13} /></button>
+                      <button className="section-action section-delete" type="button" aria-label="Excluir painel" onClick={() => deleteDashboard(item)}><Icon name="trash" size={13} /></button>
+                    </>}
                   </div>
                 </article>)}
               </div>
@@ -1417,6 +1802,8 @@ function App() {
               <div className="overview-panel alert-events-panel"><h2>Histórico de alterações</h2>{dashboard.alertEvents?.length ? [...dashboard.alertEvents].slice(-50).reverse().map((event) => <div className="event-line" key={event.id}><span>{new Date(event.at).toLocaleString('pt-BR')}</span><strong>{alertEventLabel(event.action)}</strong><span>{event.message}</span></div>) : <p className="empty-inline">Ainda não há eventos de alerta registrados.</p>}</div>
             </section>
           )}
+
+          {page === 'users' && isAdministrator && config && <UserAdministration dashboards={config.dashboards} currentUser={authUser} />}
 
           {page === 'settings' && config && (
             <section className="content-section settings-grid">
@@ -1479,17 +1866,17 @@ function App() {
                     }}
                   >
                     <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} />
-                    <div className="widget-controls" role="group" aria-label={`Controles de ${widget.title}`}>
-                      <button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button>
-                      <span className="widget-control-divider" />
+                    {canEditDashboard && <div className={`widget-controls ${isAdministrator ? '' : 'moderator-controls'}`} role="group" aria-label={`Controles de ${widget.title}`}>
+                      {isAdministrator && <><button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button><span className="widget-control-divider" /></>}
                       <button type="button" onClick={() => moveWidget(widget.id, -1)} disabled={index === 0} aria-label={`Mover ${widget.title} para esquerda`} title="Mover para esquerda"><Icon name="chevron" size={14} className="chevron-left" /></button>
                       <button type="button" onClick={() => moveWidget(widget.id, 1)} disabled={index === layout.widgets.length - 1} aria-label={`Mover ${widget.title} para direita`} title="Mover para direita"><Icon name="chevron" size={14} /></button>
-                      <span className="widget-control-divider" />
-                      <button type="button" onClick={() => resizeWidget(widget.id, -1)} disabled={isTopology ? isMapHost ? mapSize <= 56 : mapCols <= 2 : (widget.width || 1) <= 1} aria-label={`Reduzir tamanho de ${widget.title}`} title={isMapHost ? 'Diminuir bloco' : 'Diminuir tamanho'}>−</button>
-                      <button type="button" onClick={() => resizeWidget(widget.id, 1)} disabled={isTopology ? isMapHost ? mapSize >= 240 : mapCols >= 12 : (widget.width || 1) >= 4} aria-label={`Aumentar tamanho de ${widget.title}`} title={isMapHost ? 'Aumentar bloco' : 'Aumentar tamanho'}>+</button>
-                      <button type="button" className="widget-remove-button" onClick={() => setLayout((current) => ({ ...current, widgets: current.widgets.filter((item) => item.id !== widget.id) }))} aria-label={`Remover ${widget.title}`} title="Remover"><Icon name="close" size={13} /></button>
-                    </div>
-                    {isTopology && widget.type === 'timeseries' && <button className="widget-resize-handle" type="button" onPointerDown={(event) => resizeMapWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
+                      {isAdministrator && <><span className="widget-control-divider" />
+                        <button type="button" onClick={() => resizeWidget(widget.id, -1)} disabled={isTopology ? isMapHost ? mapSize <= 56 : mapCols <= 2 : (widget.width || 1) <= 1} aria-label={`Reduzir tamanho de ${widget.title}`} title={isMapHost ? 'Diminuir bloco' : 'Diminuir tamanho'}>−</button>
+                        <button type="button" onClick={() => resizeWidget(widget.id, 1)} disabled={isTopology ? isMapHost ? mapSize >= 240 : mapCols >= 12 : (widget.width || 1) >= 4} aria-label={`Aumentar tamanho de ${widget.title}`} title={isMapHost ? 'Aumentar bloco' : 'Aumentar tamanho'}>+</button>
+                        <button type="button" className="widget-remove-button" onClick={() => setLayout((current) => ({ ...current, widgets: current.widgets.filter((item) => item.id !== widget.id) }))} aria-label={`Remover ${widget.title}`} title="Remover"><Icon name="close" size={13} /></button>
+                      </>}
+                    </div>}
+                    {isAdministrator && isTopology && widget.type === 'timeseries' && <button className="widget-resize-handle" type="button" onPointerDown={(event) => resizeMapWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
                   </div>
                 )
               })}
@@ -1508,8 +1895,13 @@ function App() {
             </section>
           )}
 
-          {(page === 'overview' || page === 'dashboard' || page === 'connectivity' || page === 'servers') && layout.sections.filter((section) => page === 'connectivity' ? section.kind === 'icmp' : page === 'servers' ? section.kind === 'servers' : true).map((section) => {
-            const sectionCards = cardsForSection(section)
+          {(page === 'overview' || page === 'dashboard' || page === 'connectivity' || page === 'servers') && (page === 'connectivity'
+            ? [{ id: 'connectivity', title: 'Conectividade', kind: 'icmp' }]
+            : layout.sections.filter((section) => page === 'servers' ? section.kind === 'servers' : true)).map((section) => {
+            const sectionCards = page === 'connectivity'
+              ? orderVisible(dashboard.icmp, layout.orderIcmp, [])
+                .filter((host) => host.host_name.toLowerCase().includes(search.toLowerCase()))
+              : cardsForSection(section)
             const isIcmp = section.kind === 'icmp'
             const sectionIcon = isIcmp ? 'network' : 'server'
             const sectionCountLabel = isIcmp ? 'sistemas' : 'hosts'
@@ -1533,7 +1925,7 @@ function App() {
                   </div>
                   <div className="section-actions">
                     <span className="section-counter">{sectionCards.length} {sectionCountLabel}</span>
-                    {editMode && <>
+                    {editMode && isAdministrator && <>
                       <button className="section-action" type="button" aria-label={`Renomear ${section.title}`} onClick={() => setSectionDialog({ mode: 'rename', id: section.id, title: section.title, kind: section.kind })}><Icon name="edit" size={13} /></button>
                       <button className="section-action section-delete" type="button" aria-label={`Excluir ${section.title}`} onClick={() => handleDeleteSection(section)}><Icon name="trash" size={13} /></button>
                     </>}
@@ -1553,8 +1945,8 @@ function App() {
                   >
                     {sectionCards.map((item) => (
                       isIcmp
-                        ? <IcmpCard key={item.host_name} host={item} editMode={editMode} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
-                        : <ServerCard key={item.host_name} server={item} editMode={editMode} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
+                        ? <IcmpCard key={item.host_name} host={item} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
+                        : <ServerCard key={item.host_name} server={item} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
                     ))}
                   </div>
                 ) : (
@@ -1564,7 +1956,7 @@ function App() {
             )
           })}
 
-          <footer className="page-footer"><span>NTI PULSE <i>·</i> MONITORAMENTO DE INFRAESTRUTURA</span><span>Dados fornecidos pelo Zabbix <span className="footer-live" /></span></footer>
+          <footer className="page-footer"><span>NTIBIX <i>·</i> MONITORAMENTO E OBSERVABILIDADE</span><span>Dados fornecidos pelo Zabbix <span className="footer-live" /></span></footer>
         </div>
       </main>
       {saveNotice && (

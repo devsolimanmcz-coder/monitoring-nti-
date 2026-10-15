@@ -11,7 +11,7 @@
 .brand-symbol { display: grid; place-items: center; width: 37px; height: 37px; border: 1px solid rgba(106, 169, 255, .26); border-radius: 11px; color: #86b9ff; background: linear-gradient(145deg, rgba(79, 143, 229, .2), rgba(79, 143, 229, .04)); box-shadow: 0 0 22px rgba(71, 140, 237, .11); }
 .brand-name { display: block; color: #f0f4fc; font: 700 20px/.95 'Space Grotesk', sans-serif; letter-spacing: -.8px; }
 .brand-name > span { color: #75adff; }
-.brand-name small { display: block; margin-top: 7px; color: #76869e; font: 600 8px/1 'DM Sans', sans-serif; letter-spacing: 2px; }
+.brand-name small { display: block; margin-top: 7px; color: #76869e; font: 600 7px/1 'DM Sans', sans-serif; letter-spacing: 1px; white-space: nowrap; }
 .nav-label { padding: 0 12px; margin-bottom: 11px; color: #66768c; font-size: 9px; font-weight: 700; letter-spacing: 1.7px; }
 .main-nav { display: grid; gap: 5px; }
 .nav-link { position: relative; display: flex; align-items: center; gap: 12px; min-height: 43px; padding: 0 12px; border: 1px solid transparent; border-radius: 9px; color: #929fb2; font-size: 12px; font-weight: 500; transition: color .18s, background .18s, border-color .18s; }
@@ -353,6 +353,52 @@
 .settings-toggle input,.kiosk-dashboard-list input { accent-color: #63a6ff; }
 .kiosk-dashboard-list { display: grid; gap: 8px; padding: 9px 0; color: #aab8ca; font-size: 9px; }
 .kiosk-dashboard-list label { display: flex; align-items: center; gap: 8px; }
+.login-screen { position: relative; display: grid; min-height: 100vh; place-items: center; padding: 22px; overflow: hidden; background: #090e18; }
+.login-glow { position: fixed; top: 12%; left: calc(50% - 260px); width: 520px; height: 520px; border-radius: 50%; background: rgba(43,112,206,.14); filter: blur(110px); pointer-events: none; }
+.login-card { position: relative; width: min(100%,390px); padding: 30px; background: linear-gradient(145deg,rgba(20,30,46,.98),rgba(12,19,31,.99)); border: 1px solid rgba(139,164,198,.2); border-radius: 16px; box-shadow: 0 24px 80px rgba(0,0,0,.4); }
+.login-brand { padding: 0; margin: 0 0 36px; }
+.login-card h1 { margin: 0; color: #f0f4fb; font: 600 26px/1.2 'Space Grotesk',sans-serif; letter-spacing: -.7px; }
+.login-card > p { margin: 9px 0 23px; color: #8796aa; font-size: 11px; line-height: 1.55; }
+.login-card .dialog-field { margin-bottom: 15px; }
+.login-submit { width: 100%; min-height: 40px; margin-top: 3px; font-size: 11px; }
+.login-submit:disabled { opacity: .6; cursor: wait; }
+.login-footnote { display: block; margin-top: 22px; color: #6e7e93; font-size: 9px; text-align: center; }
+.unauthorized-card { text-align: center; }
+.unauthorized-card .eyebrow { justify-content: center; margin: 15px 0 9px; }
+.unauthorized-card h1 { font-size: 23px; }
+.unauthorized-icon { display: grid; width: 52px; height: 52px; place-items: center; margin: 0 auto; color: #9fc4fa; background: rgba(106,169,255,.1); border: 1px solid rgba(106,169,255,.2); border-radius: 15px; }
+.unauthorized-card .edit-panel-button { margin: 5px auto 0; }
+.user-role-label { color: #8393a9; font-size: 9px; white-space: nowrap; }
+.user-avatar { flex: 0 0 auto; padding: 0; cursor: pointer; }
+.user-avatar:hover { border-color: rgba(106,169,255,.55); }
+.user-admin { display: grid; gap: 14px; }
+.user-admin-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px; background: rgba(16,23,36,.72); border: 1px solid var(--border); border-radius: 11px; }
+.user-admin-intro h2,.user-create-form h3 { margin: 0; color: #e0e8f3; font: 600 14px 'Space Grotesk',sans-serif; }
+.user-admin-intro p { margin: 6px 0 0; color: #8190a5; font-size: 10px; }
+.user-admin-badge,.user-self-tag { padding: 5px 8px; color: #a9cbf8; background: rgba(106,169,255,.09); border: 1px solid rgba(106,169,255,.16); border-radius: 20px; font-size: 8px; white-space: nowrap; }
+.user-create-form { display: grid; gap: 10px; padding: 16px; background: rgba(16,23,36,.72); border: 1px solid var(--border); border-radius: 11px; }
+.user-create-fields,.user-row-edit { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.user-create-fields .dialog-field,.user-row-edit .dialog-field { margin-bottom: 0; }
+.user-create-fields input,.user-row-edit input,.user-row-edit select { box-sizing: border-box; width: 100%; height: 36px; padding: 0 9px; color: #e0e8f3; background: #0c1420; border: 1px solid rgba(139,164,198,.17); border-radius: 7px; font-size: 10px; }
+.user-create-fields select { box-sizing: border-box; width: 100%; height: 36px; padding: 0 9px; color: #e0e8f3; background: #0c1420; border: 1px solid rgba(139,164,198,.17); border-radius: 7px; font-size: 10px; }
+.dashboard-permissions { display: flex; flex-wrap: wrap; gap: 9px 16px; padding: 9px 11px; margin: 0; color: #aab8ca; border: 1px solid rgba(139,164,198,.16); border-radius: 8px; }
+.dashboard-permissions legend { padding: 0 5px; color: #8292a8; font-size: 9px; }
+.dashboard-permissions label { display: inline-flex; align-items: center; gap: 6px; font-size: 9px; }
+.dashboard-permissions input { accent-color: #63a6ff; }
+.user-create-form > .edit-panel-button { justify-self: end; }
+.user-list { display: grid; gap: 10px; }
+.user-row { display: grid; gap: 11px; padding: 15px; background: rgba(16,23,36,.72); border: 1px solid var(--border); border-radius: 11px; }
+.user-row-heading { display: flex; align-items: center; gap: 9px; }
+.user-row-heading > div { display: grid; gap: 3px; }
+.user-row-heading strong { color: #e0e8f3; font-size: 11px; }
+.user-row-heading small { color: #8292a8; font-size: 9px; }
+.user-state { width: 7px; height: 7px; background: #47d7a0; border-radius: 50%; box-shadow: 0 0 8px rgba(71,215,160,.5); }
+.user-state.disabled { background: #ff6f7d; box-shadow: 0 0 8px rgba(255,111,125,.4); }
+.user-self-tag { margin-left: auto; }
+.user-row-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.user-row-actions .section-action { width: auto; padding: 0 9px; font-size: 9px; }
+.user-admin-notice { padding: 10px 12px; margin: 0; color: #91e0bb; background: rgba(71,215,160,.08); border: 1px solid rgba(71,215,160,.17); border-radius: 8px; font-size: 10px; }
+.moderator-controls { gap: 4px; }
 .custom-widget-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,280px),1fr)); grid-auto-flow: row dense; align-items: stretch; gap: 12px; margin: 18px 0 25px; }
 .topology-map { grid-template-columns: repeat(auto-fill,minmax(80px,1fr)); grid-auto-rows: 80px; grid-auto-flow: row; align-items: center; gap: 12px; }
 .topology-map-hint { grid-column: 1 / -1; color: #8190a5; font-size: 9px; }
@@ -456,6 +502,9 @@
   .custom-widget-wrap.widget-width-2,.custom-widget-wrap.widget-width-3,.custom-widget-wrap.widget-width-4 { grid-column: span 1; }
   .event-line { grid-template-columns: 1fr; gap: 4px; }
   .settings-field { grid-template-columns: 1fr; }
+  .user-create-fields,.user-row-edit { grid-template-columns: 1fr; }
+  .user-role-label { display: none; }
+  .login-card { padding: 24px; }
 }
 @media (max-width: 560px) {
   .topology-map { grid-template-columns: repeat(auto-fill,minmax(72px,1fr)); grid-auto-rows: 80px; gap: 8px; }
@@ -490,6 +539,10 @@
 :root[data-theme="light"] .topology-host-node strong { color: #273a53; }
 :root[data-theme="light"] .topology-host-icon { color: #10200b; }
 :root[data-theme="light"] .widget-resize-handle { color: #42546b; background: rgba(255,255,255,.92); }
+:root[data-theme="light"] .login-screen { background: #edf2f8; }
+:root[data-theme="light"] .login-card,:root[data-theme="light"] .user-create-form,:root[data-theme="light"] .user-row,:root[data-theme="light"] .user-admin-intro { background: #fff; }
+:root[data-theme="light"] .login-card h1,:root[data-theme="light"] .user-admin-intro h2,:root[data-theme="light"] .user-create-form h3,:root[data-theme="light"] .user-row-heading strong { color: #1b2b40; }
+:root[data-theme="light"] .user-create-fields input,:root[data-theme="light"] .user-create-fields select,:root[data-theme="light"] .user-row-edit input,:root[data-theme="light"] .user-row-edit select { color: #20344d; background: #f8fafd; }
 :root[data-theme="light"] .section-dialog { background: #fff; }
 :root[data-theme="light"] .dialog-heading h2 { color: #1b2b40; }
 :root[data-theme="light"] .dialog-field > span { color: #53647b; }

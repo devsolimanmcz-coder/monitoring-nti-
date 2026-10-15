@@ -1,7 +1,22 @@
-# NTI Pulse
+# NTIBIX — Monitoramento e Observabilidade
 
-Painel de monitoramento de infraestrutura desenvolvido com React, Node.js,
+Painel de monitoramento e observabilidade desenvolvido com React, Node.js,
 Express e MySQL/MariaDB do Zabbix.
+
+## Acesso e grupos
+
+Na primeira inicialização, se ainda não existir `data/users.json`, o sistema
+cria a conta de teste `nti` com a senha `ntim4ster` no grupo administrador.
+Troque essa senha antes de disponibilizar o sistema a outras pessoas ou à rede.
+As senhas são armazenadas como hashes scrypt; o arquivo de usuários e as sessões
+nunca são compartilhados com o banco do Zabbix.
+
+Entre pela rota `#/login`. Administradores têm acesso total e gerenciam contas;
+moderadores podem adicionar indicadores e seções e mover cards, mas não podem
+excluir nem editar conteúdo existente ou configurações globais; visualizadores
+acessam somente os painéis atribuídos pelo administrador. O acesso à API também
+é protegido por sessão, não apenas pela interface. As sessões expiram após
+oito horas e são encerradas quando o servidor reinicia.
 
 ## Requisitos
 
@@ -74,6 +89,10 @@ o estado de disponibilidade; gráficos podem combinar até oito séries da mesma
 unidade e oferecem períodos de 15 minutos a 7 dias, escala vertical automática
 e rótulos de horário.
 
-A configuração compartilhada fica em `data/dashboard.json`, no servidor da
-aplicação, separada do banco do Zabbix. Esse arquivo é criado automaticamente e
-ignorado pelo Git; faça uma cópia de segurança dele ao implantar.
+A configuração compartilhada e as contas ficam, respectivamente, em
+`data/dashboard.json` e `data/users.json`, separadas do banco do Zabbix. Os dois
+arquivos JSON são versionados para migrar painéis e contas para outra máquina.
+`users.json` contém hashes de senha e metadados das contas, nunca senhas em
+texto puro; limite o acesso ao repositório. Arquivos temporários `.tmp` e `.env`
+continuam fora do Git. As sessões ficam somente na memória do servidor, então
+será necessário entrar novamente após reinicializações ou ao trocar de máquina.

@@ -2,6 +2,16 @@ import 'dotenv/config'
 import express from 'express'
 import mysql from 'mysql2/promise'
 import {
+  addUser,
+  authenticateUser,
+  deleteUser,
+  getAuthenticatedUser,
+  initializeAuthStore,
+  listUsers,
+  revokeSession,
+  updateUser,
+} from './auth.js'
+import {
   CATALOG_HOSTS_QUERY,
   CATALOG_QUERY,
   ICMP_QUERY,
@@ -15,10 +25,13 @@ import {
   readDashboardConfig,
   updateDashboardConfig,
 } from './dashboard-config.js'
+import { assertModeratorConfigUpdate } from './dashboard-permissions.js'
 
 const app = express()
+app.use(express.json({ limit: '1mb' }))
 const port = Number(process.env.API_PORT || 3001)
 const host = process.env.API_HOST || '127.0.0.1'
+const SESSION_COOKIE = 'nti_pulse_session'
 const HISTORY_RANGES = new Map([
   ['15m', 900],
   ['1h', 3600],
@@ -28,6 +41,81 @@ const HISTORY_RANGES = new Map([
 ])
 
 let pool
+
+function readSessionToken(request) {
+  const cookies = request.headers.cookie || ''
+  for (const cookie of cookies.split(';')) {
+    const [name, ...value] = cookie.trim().split('=')
+    if (name === SESSION_COOKIE) return decodeURIComponent(value.join('='))
+  }
+  return ''
+}
+
+function setSessionCookie(response, token) {
+  response.cookie(SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+    maxAge: 8 * 60 * 60 * 1000,
+  })
+}
+
+function clearSessionCookie(response) {
+  response.clearCookie(SESSION_COOKIE, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+  })
+}
+
+function requireAuth(request, response, next) {
+  const user = getAuthenticatedUser(readSessionToken(request))
+  if (!user) {
+    response.status(401).json({ error: 'Entre na sua conta para continuar.' })
+    return
+  }
+  request.authUser = user
+  request.authToken = readSessionToken(request)
+  next()
+}
+
+function requireRole(...roles) {
+  return (request, response, next) => {
+    if (!roles.includes(request.authUser?.role)) {
+      response.status(403).json({ error: 'Seu grupo não tem permissão para esta ação.' })
+      return
+    }
+    next()
+  }
+}
+
+function filteredConfigForUser(config, user) {
+  if (user.role !== 'view') return config
+  const dashboards = config.dashboards.filter((item) => user.dashboardIds.includes(item.id))
+  if (!dashboards.length) return null
+  return {
+    ...config,
+    dashboards,
+    activeDashboardId: dashboards.some((item) => item.id === config.activeDashboardId)
+      ? config.activeDashboardId
+      : dashboards[0].id,
+    defaultDashboardId: dashboards.some((item) => item.id === config.defaultDashboardId)
+      ? config.defaultDashboardId
+      : dashboards[0].id,
+  }
+}
+
+async function userCanReadHistoryItems(user, itemIds) {
+  if (user.role !== 'view') return true
+  const config = await readDashboardConfig()
+  const permittedIds = new Set(config.dashboards
+    .filter((dashboard) => user.dashboardIds.includes(dashboard.id))
+    .flatMap((dashboard) => dashboard.widgets.flatMap((widget) => widget.itemIds || [widget.itemId]))
+    .map(Number))
+  return itemIds.every((itemId) => permittedIds.has(itemId))
+}
 
 function getPool() {
   const required = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']
@@ -63,6 +151,62 @@ function toNullableNumber(value) {
   return Number.isFinite(number) ? number : null
 }
 
+app.post('/api/auth/login', async (request, response) => {
+  try {
+    const session = await authenticateUser(request.body?.username, request.body?.password, request.ip)
+    setSessionCookie(response, session.token)
+    response.json({ user: session.user, expiresIn: session.expiresIn })
+  } catch (error) {
+    response.status(401).json({ error: error.message })
+  }
+})
+
+app.get('/api/auth/me', requireAuth, (request, response) => {
+  response.json({ user: request.authUser })
+})
+
+app.post('/api/auth/logout', (request, response) => {
+  revokeSession(readSessionToken(request))
+  clearSessionCookie(response)
+  response.status(204).end()
+})
+
+app.get('/api/users', requireAuth, requireRole('administrator'), (_request, response) => {
+  response.json(listUsers())
+})
+
+app.post('/api/users', requireAuth, requireRole('administrator'), async (request, response) => {
+  try {
+    const config = await readDashboardConfig()
+    const validDashboardIds = new Set(config.dashboards.map((item) => item.id))
+    response.status(201).json(await addUser(request.body || {}, validDashboardIds))
+  } catch (error) {
+    response.status(400).json({ error: error.message || 'Não foi possível criar o usuário.' })
+  }
+})
+
+app.patch('/api/users/:userId', requireAuth, requireRole('administrator'), async (request, response) => {
+  try {
+    const config = await readDashboardConfig()
+    const validDashboardIds = new Set(config.dashboards.map((item) => item.id))
+    response.json(await updateUser(request.params.userId, {
+      ...request.body,
+      requesterId: request.authUser.id,
+    }, validDashboardIds))
+  } catch (error) {
+    response.status(400).json({ error: error.message || 'Não foi possível atualizar o usuário.' })
+  }
+})
+
+app.delete('/api/users/:userId', requireAuth, requireRole('administrator'), async (request, response) => {
+  try {
+    await deleteUser(request.params.userId, request.authUser.id)
+    response.status(204).end()
+  } catch (error) {
+    response.status(400).json({ error: error.message || 'Não foi possível excluir o usuário.' })
+  }
+})
+
 app.get('/api/health', async (_request, response) => {
   try {
     await getPool().query('SELECT 1')
@@ -79,23 +223,31 @@ app.get('/api/health', async (_request, response) => {
   }
 })
 
-app.get('/api/dashboard-config', async (_request, response) => {
+app.get('/api/dashboard-config', requireAuth, async (request, response) => {
   try {
-    response.json(await readDashboardConfig())
+    const config = filteredConfigForUser(await readDashboardConfig(), request.authUser)
+    if (!config) {
+      response.status(403).json({ error: 'Nenhum painel está atribuído à sua conta. Peça ao administrador que atribua um painel.' })
+      return
+    }
+    response.json(config)
   } catch (error) {
     console.error('Leitura da configuração do dashboard falhou:', error.message)
     response.status(500).json({ error: 'Não foi possível ler a configuração do painel.' })
   }
 })
 
-app.put('/api/dashboard-config', express.json({ limit: '1mb' }), async (request, response) => {
+app.put('/api/dashboard-config', requireAuth, requireRole('administrator', 'moderator'), async (request, response) => {
   try {
-    response.json(await updateDashboardConfig((persisted) => ({
-      ...request.body,
-      alerts: persisted.alerts,
-      alertEvents: persisted.alertEvents,
-      conditions: persisted.conditions,
-    })))
+    response.json(await updateDashboardConfig((persisted) => {
+      if (request.authUser.role === 'moderator') assertModeratorConfigUpdate(persisted, request.body)
+      return {
+        ...request.body,
+        alerts: persisted.alerts,
+        alertEvents: persisted.alertEvents,
+        conditions: persisted.conditions,
+      }
+    }))
   } catch (error) {
     console.error('Salvamento da configuração do dashboard falhou:', error.message)
     response.status(error.code ? 500 : 400).json({
@@ -106,7 +258,7 @@ app.put('/api/dashboard-config', express.json({ limit: '1mb' }), async (request,
   }
 })
 
-app.get('/api/catalog', async (request, response) => {
+app.get('/api/catalog', requireAuth, requireRole('administrator', 'moderator'), async (request, response) => {
   try {
     const hostIdValue = request.query.hostId
     const hostId = hostIdValue === undefined ? 0 : Number(hostIdValue)
@@ -139,7 +291,7 @@ app.get('/api/catalog', async (request, response) => {
   }
 })
 
-app.get('/api/catalog/hosts', async (_request, response) => {
+app.get('/api/catalog/hosts', requireAuth, requireRole('administrator', 'moderator'), async (_request, response) => {
   try {
     const [rows] = await getPool().query(CATALOG_HOSTS_QUERY)
     response.json(rows.map((row) => ({ hostId: Number(row.hostid), hostName: row.host })))
@@ -149,7 +301,7 @@ app.get('/api/catalog/hosts', async (_request, response) => {
   }
 })
 
-app.get('/api/history', async (request, response) => {
+app.get('/api/history', requireAuth, async (request, response) => {
   const rawIds = typeof request.query.itemIds === 'string' ? request.query.itemIds : ''
   const itemIds = [...new Set(rawIds.split(',').map(Number))]
   const range = typeof request.query.range === 'string' ? request.query.range : '1h'
@@ -160,6 +312,10 @@ app.get('/api/history', async (request, response) => {
   }
 
   try {
+    if (!await userCanReadHistoryItems(request.authUser, itemIds)) {
+      response.status(403).json({ error: 'Esse histórico não pertence aos painéis atribuídos à sua conta.' })
+      return
+    }
     const database = getPool()
     const placeholders = itemIds.map(() => '?').join(',')
     const metadataQuery = ITEM_TYPE_BATCH_QUERY.replace('%s', placeholders)
@@ -201,7 +357,7 @@ app.get('/api/history', async (request, response) => {
   }
 })
 
-app.get('/api/history/:itemId', async (request, response) => {
+app.get('/api/history/:itemId', requireAuth, async (request, response) => {
   const itemId = Number(request.params.itemId)
   const range = typeof request.query.range === 'string' ? request.query.range : '1h'
   const seconds = HISTORY_RANGES.get(range)
@@ -211,6 +367,10 @@ app.get('/api/history/:itemId', async (request, response) => {
   }
 
   try {
+    if (!await userCanReadHistoryItems(request.authUser, [itemId])) {
+      response.status(403).json({ error: 'Esse histórico não pertence aos painéis atribuídos à sua conta.' })
+      return
+    }
     const database = getPool()
     const [items] = await database.execute(ITEM_TYPE_QUERY, [itemId])
     if (!items.length) {
@@ -241,7 +401,7 @@ app.get('/api/history/:itemId', async (request, response) => {
   }
 })
 
-app.get('/api/alerts', async (_request, response) => {
+app.get('/api/alerts', requireAuth, requireRole('administrator', 'moderator'), async (_request, response) => {
   try {
     const config = await readDashboardConfig()
     response.json({ alerts: config.alerts, events: config.alertEvents, rules: config.alertRules })
@@ -251,7 +411,7 @@ app.get('/api/alerts', async (_request, response) => {
   }
 })
 
-app.post('/api/alerts/:alertId/acknowledge', express.json({ limit: '16kb' }), async (request, response) => {
+app.post('/api/alerts/:alertId/acknowledge', requireAuth, requireRole('administrator', 'moderator'), async (request, response) => {
   try {
     let result
     await updateDashboardConfig((config) => {
@@ -282,7 +442,7 @@ app.post('/api/alerts/:alertId/acknowledge', express.json({ limit: '16kb' }), as
   }
 })
 
-app.get('/api/dashboard', async (_request, response) => {
+app.get('/api/dashboard', requireAuth, async (request, response) => {
   try {
     const database = getPool()
     const [icmpRows, serverRows, diskRows] = await Promise.all([
@@ -322,12 +482,25 @@ app.get('/api/dashboard', async (_request, response) => {
       })),
     }
     const savedConfig = await updateDashboardConfig((config) => evaluateAlerts(config, dashboard))
-    response.json({
+    const responseDashboard = {
       ...dashboard,
       alerts: savedConfig.alerts,
       alertEvents: savedConfig.alertEvents,
       preferences: savedConfig.preferences,
-    })
+    }
+    if (request.authUser.role === 'view') {
+      const config = filteredConfigForUser(savedConfig, request.authUser)
+      if (!config) {
+        response.status(403).json({ error: 'Nenhum painel está atribuído à sua conta.' })
+        return
+      }
+      const permittedKinds = new Set(config.dashboards.flatMap((item) => item.sections.map((section) => section.kind)))
+      responseDashboard.icmp = permittedKinds.has('icmp') ? responseDashboard.icmp : []
+      responseDashboard.servers = permittedKinds.has('servers') ? responseDashboard.servers : []
+      responseDashboard.alerts = []
+      responseDashboard.alertEvents = []
+    }
+    response.json(responseDashboard)
   } catch (error) {
     console.error('Consulta do dashboard falhou:', error.message)
     response.status(503).json({
@@ -337,6 +510,8 @@ app.get('/api/dashboard', async (_request, response) => {
     })
   }
 })
+
+await initializeAuthStore()
 
 const server = app.listen(port, host, () => {
   console.log(`API de monitoramento disponível em http://${host}:${port}`)
