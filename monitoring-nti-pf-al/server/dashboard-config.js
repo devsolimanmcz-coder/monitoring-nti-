@@ -129,7 +129,7 @@ function normalizeDashboard(dashboard) {
       throw new Error('Cada indicador deve ter de 1 a 8 itens válidos; disponibilidade aceita apenas um item.')
     }
     const range = widget.range || '1h'
-    if (!['15m', '1h', '6h', '24h', '7d', '30d'].includes(range)) {
+    if (!['15m', '1h', '3h', '6h', '24h', '7d', '30d'].includes(range)) {
       throw new Error('Período de histórico inválido para o indicador.')
     }
     const mapSizePx = Number(widget.mapSizePx ?? 80)

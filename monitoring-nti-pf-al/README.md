@@ -16,7 +16,8 @@ moderadores podem adicionar indicadores e seções e mover cards, mas não podem
 excluir nem editar conteúdo existente ou configurações globais; visualizadores
 acessam somente os painéis atribuídos pelo administrador. O acesso à API também
 é protegido por sessão, não apenas pela interface. As sessões expiram após
-oito horas e são encerradas quando o servidor reinicia.
+oito horas e continuam válidas após reinicializações do servidor. O arquivo
+local `data/sessions.json` contém apenas hashes dos tokens das sessões ativas.
 
 ## Requisitos
 
@@ -68,9 +69,9 @@ seções do mesmo tipo. As seções iniciais são **INFRAESTRUTURA - ATIVOS DE R
 
 Também é possível criar uma seção **Consumo de dados e tráfego** em qualquer
 painel e incluir nela gráficos de itens numéricos do Zabbix. Cada gráfico pode
-acompanhar períodos de 1 hora, 1 dia, 7 dias ou 30 dias (mensal); os períodos
-mais longos são resumidos em até 300 amostras para preservar a leitura do
-histórico sem sobrecarregar o painel.
+acompanhar períodos de 15 minutos, 1 hora, 3 horas, 6 horas, 1 dia, 7 dias ou
+30 dias (mensal); os períodos mais longos são resumidos em até 300 amostras
+para preservar a leitura do histórico sem sobrecarregar o painel.
 
 Painéis novos começam vazios. Em **Adicionar indicador**, selecione primeiro um
 equipamento do Zabbix e depois um de seus itens numéricos; listas grandes são
@@ -98,9 +99,8 @@ unidade e oferecem períodos de 15 minutos a 30 dias, escala vertical automátic
 e rótulos de horário.
 
 A configuração compartilhada e as contas ficam, respectivamente, em
-`data/dashboard.json` e `data/users.json`, separadas do banco do Zabbix. Os dois
-arquivos JSON são versionados para migrar painéis e contas para outra máquina.
+`data/dashboard.json` e `data/users.json`, separadas do banco do Zabbix.
 `users.json` contém hashes de senha e metadados das contas, nunca senhas em
-texto puro; limite o acesso ao repositório. Arquivos temporários `.tmp` e `.env`
-continuam fora do Git. As sessões ficam somente na memória do servidor, então
-será necessário entrar novamente após reinicializações ou ao trocar de máquina.
+texto puro; limite o acesso a esse arquivo. Os hashes de sessão em
+`data/sessions.json` são locais e ignorados pelo Git; arquivos temporários
+`.tmp` e `.env` também não devem ser versionados.

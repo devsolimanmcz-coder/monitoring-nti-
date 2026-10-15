@@ -17,7 +17,7 @@
           "id": "2a73a20c-4512-42e8-a529-67479f88b348",
           "title": "LINK EMBRATEL MPLS",
           "type": "timeseries",
-          "range": "1h",
+          "range": "6h",
           "itemId": 61450,
           "itemIds": [
             61450,
@@ -50,14 +50,14 @@
           "mapSizePx": 80,
           "mapCols": 9,
           "mapRows": 4,
-          "mapX": 14,
+          "mapX": 0,
           "mapY": 0
         },
         {
           "id": "53335e1a-147c-42e4-a2a3-4462d0ebd124",
           "title": "LINK EMBRATEL MPLS",
           "type": "timeseries",
-          "range": "1h",
+          "range": "6h",
           "itemId": 61450,
           "itemIds": [
             61450,
@@ -90,7 +90,7 @@
           "mapSizePx": 80,
           "mapCols": 8,
           "mapRows": 4,
-          "mapX": 848,
+          "mapX": 829,
           "mapY": 0
         },
         {
@@ -121,8 +121,8 @@
           "mapSizePx": 80,
           "mapCols": 4,
           "mapRows": 4,
-          "mapX": 0,
-          "mapY": 367
+          "mapX": 1008,
+          "mapY": 426
         }
       ]
     },
@@ -307,7 +307,7 @@
     },
     "cardSizes": {}
   },
-  "activeDashboardId": "dashboard-f0db445f-b010-4121-9f2a-e17549092ec0",
+  "activeDashboardId": "dashboard-48a68545-5267-469a-a245-7f84240db2cc",
   "defaultDashboardId": "dashboard-48a68545-5267-469a-a245-7f84240db2cc",
   "preferences": {
     "autoRefresh": true,
@@ -1261,6 +1261,51 @@
       "lastOccurrence": "2026-10-15T14:51:51.045Z",
       "acknowledgedAt": null,
       "resolvedAt": "2026-10-15T14:52:20.905Z"
+    },
+    {
+      "id": "f9d30b90-4aeb-40ae-9d31-38f361389084",
+      "key": "packet-loss:LINK-ARAPIRACA-PEP",
+      "hostName": "LINK-ARAPIRACA-PEP",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T15:23:57.690Z",
+      "lastOccurrence": "2026-10-15T15:40:57.654Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T15:41:58.257Z"
+    },
+    {
+      "id": "0479ff1a-3373-4551-8460-102d3a1ffd7a",
+      "key": "packet-loss:LINK-ARAPIRACA-PEP",
+      "hostName": "LINK-ARAPIRACA-PEP",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.13%",
+      "severity": "warning",
+      "value": 1.13,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T16:24:58.543Z",
+      "lastOccurrence": "2026-10-15T16:27:26.911Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T16:30:20.086Z"
+    },
+    {
+      "id": "6c7f14d4-2a47-4b97-a5af-ad7006609c27",
+      "key": "packet-loss:SINPA",
+      "hostName": "SINPA",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.13%",
+      "severity": "warning",
+      "value": 1.13,
+      "threshold": 1,
+      "status": "active",
+      "startedAt": "2026-10-15T16:32:50.807Z",
+      "lastOccurrence": "2026-10-15T16:37:42.335Z",
+      "acknowledgedAt": null,
+      "resolvedAt": null
     }
   ],
   "alertEvents": [
@@ -2159,10 +2204,46 @@
       "action": "resolved",
       "message": "Condição normalizada automaticamente.",
       "at": "2026-10-15T15:12:17.021Z"
+    },
+    {
+      "id": "f8bae680-b203-42dc-8215-382f9e602679",
+      "alertId": "f9d30b90-4aeb-40ae-9d31-38f361389084",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T15:36:59.486Z"
+    },
+    {
+      "id": "8952093a-07fa-41d7-bd20-af28da52c9ac",
+      "alertId": "f9d30b90-4aeb-40ae-9d31-38f361389084",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T15:41:58.257Z"
+    },
+    {
+      "id": "84587a32-bc63-4489-80ed-c644614e77aa",
+      "alertId": "0479ff1a-3373-4551-8460-102d3a1ffd7a",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T16:26:26.468Z"
+    },
+    {
+      "id": "7f27927e-d59b-4f3f-b77a-4b34d2c75c76",
+      "alertId": "0479ff1a-3373-4551-8460-102d3a1ffd7a",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T16:30:20.086Z"
+    },
+    {
+      "id": "f802d31f-104b-434a-98e0-6f673028aa8a",
+      "alertId": "6c7f14d4-2a47-4b97-a5af-ad7006609c27",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T16:33:57.366Z"
     }
   ],
   "conditions": {
-    "packet-loss:AERO-MCZ-PF-AL": 1792077167321,
-    "packet-loss:LINK-ARAPIRACA-PEP": 1792077167321
+    "packet-loss:SINPA": 1792081970807,
+    "packet-loss:LINK-MACEIO-PEP": 1792082037366,
+    "packet-loss:AERO-MCZ-PF-AL": 1792082097783
   }
 }

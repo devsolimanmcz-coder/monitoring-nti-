@@ -35,6 +35,7 @@ const SESSION_COOKIE = 'nti_pulse_session'
 const HISTORY_RANGES = new Map([
   ['15m', 900],
   ['1h', 3600],
+  ['3h', 10800],
   ['6h', 21600],
   ['24h', 86400],
   ['7d', 604800],
@@ -158,7 +159,7 @@ app.post('/api/auth/login', async (request, response) => {
     setSessionCookie(response, session.token)
     response.json({ user: session.user, expiresIn: session.expiresIn })
   } catch (error) {
-    response.status(401).json({ error: error.message })
+    response.status(error.code ? 500 : 401).json({ error: error.message })
   }
 })
 
@@ -166,8 +167,15 @@ app.get('/api/auth/me', requireAuth, (request, response) => {
   response.json({ user: request.authUser })
 })
 
-app.post('/api/auth/logout', (request, response) => {
-  revokeSession(readSessionToken(request))
+app.post('/api/auth/logout', async (request, response) => {
+  try {
+    await revokeSession(readSessionToken(request))
+  } catch (error) {
+    console.error('Falha ao encerrar sessão no armazenamento:', error.message)
+    clearSessionCookie(response)
+    response.status(500).json({ error: 'Não foi possível encerrar a sessão no servidor.' })
+    return
+  }
   clearSessionCookie(response)
   response.status(204).end()
 })
@@ -182,7 +190,7 @@ app.post('/api/users', requireAuth, requireRole('administrator'), async (request
     const validDashboardIds = new Set(config.dashboards.map((item) => item.id))
     response.status(201).json(await addUser(request.body || {}, validDashboardIds))
   } catch (error) {
-    response.status(400).json({ error: error.message || 'Não foi possível criar o usuário.' })
+    response.status(error.code ? 500 : 400).json({ error: error.message || 'Não foi possível criar o usuário.' })
   }
 })
 
@@ -195,7 +203,7 @@ app.patch('/api/users/:userId', requireAuth, requireRole('administrator'), async
       requesterId: request.authUser.id,
     }, validDashboardIds))
   } catch (error) {
-    response.status(400).json({ error: error.message || 'Não foi possível atualizar o usuário.' })
+    response.status(error.code ? 500 : 400).json({ error: error.message || 'Não foi possível atualizar o usuário.' })
   }
 })
 
@@ -204,7 +212,7 @@ app.delete('/api/users/:userId', requireAuth, requireRole('administrator'), asyn
     await deleteUser(request.params.userId, request.authUser.id)
     response.status(204).end()
   } catch (error) {
-    response.status(400).json({ error: error.message || 'Não foi possível excluir o usuário.' })
+    response.status(error.code ? 500 : 400).json({ error: error.message || 'Não foi possível excluir o usuário.' })
   }
 })
 

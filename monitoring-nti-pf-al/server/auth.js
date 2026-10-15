@@ -1,4 +1,4 @@
-import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -9,11 +9,13 @@ const MAX_LOGIN_ATTEMPTS = 5
 const LOGIN_LOCK_MS = 15 * 60 * 1000
 const dataDirectory = path.resolve(process.env.APP_DATA_DIR || 'data')
 const usersPath = path.join(dataDirectory, 'users.json')
+const sessionsPath = path.join(dataDirectory, 'sessions.json')
 const sessions = new Map()
 const loginAttempts = new Map()
 let users = []
 let initialized = false
 let writeQueue = Promise.resolve()
+let sessionWriteQueue = Promise.resolve()
 
 const bootstrapAdmin = {
   id: 'builtin-nti-admin',
@@ -48,6 +50,22 @@ async function persistUsers() {
   await operation
 }
 
+function hashSessionToken(token) {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+async function persistSessions() {
+  const operation = sessionWriteQueue.then(async () => {
+    await mkdir(dataDirectory, { recursive: true })
+    const tempPath = `${sessionsPath}.${randomBytes(8).toString('hex')}.tmp`
+    const records = [...sessions].map(([tokenHash, session]) => ({ tokenHash, ...session }))
+    await writeFile(tempPath, `${JSON.stringify(records, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+    await rename(tempPath, sessionsPath)
+  })
+  sessionWriteQueue = operation.catch(() => undefined)
+  await operation
+}
+
 export async function initializeAuthStore() {
   if (initialized) return
   try {
@@ -71,6 +89,29 @@ export async function initializeAuthStore() {
   }
   if (!users.some((user) => user.role === 'administrator' && !user.disabled)) {
     throw new Error('É necessário manter pelo menos uma conta administradora ativa.')
+  }
+  let shouldPersistSessions = false
+  try {
+    const loadedSessions = JSON.parse(await readFile(sessionsPath, 'utf8'))
+    if (!Array.isArray(loadedSessions) || loadedSessions.some((session) => (
+      typeof session.tokenHash !== 'string'
+      || !/^[a-f0-9]{64}$/.test(session.tokenHash)
+      || typeof session.userId !== 'string'
+      || !Number.isFinite(session.expiresAt)
+    ))) {
+      throw new Error('O arquivo de sessões contém dados inválidos.')
+    }
+    for (const session of loadedSessions) {
+      const user = users.find((entry) => entry.id === session.userId && !entry.disabled)
+      if (!user || session.expiresAt <= Date.now()) {
+        shouldPersistSessions = true
+        continue
+      }
+      sessions.set(session.tokenHash, { userId: session.userId, expiresAt: session.expiresAt })
+    }
+    if (shouldPersistSessions) await persistSessions()
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
   }
   initialized = true
 }
@@ -109,35 +150,47 @@ export async function authenticateUser(username, password, remoteAddress = 'unkn
   loginAttempts.delete(attemptKey)
 
   const token = randomBytes(32).toString('base64url')
-  sessions.set(token, { userId: user.id, expiresAt: Date.now() + SESSION_TTL_MS })
+  sessions.set(hashSessionToken(token), { userId: user.id, expiresAt: Date.now() + SESSION_TTL_MS })
+  try {
+    await persistSessions()
+  } catch (error) {
+    sessions.delete(hashSessionToken(token))
+    throw error
+  }
   return { token, user: publicUser(user), expiresIn: SESSION_TTL_MS }
 }
 
 export function getAuthenticatedUser(token) {
   ensureInitialized()
   if (typeof token !== 'string') return null
-  const session = sessions.get(token)
+  const tokenHash = hashSessionToken(token)
+  const session = sessions.get(tokenHash)
   if (!session) return null
   if (session.expiresAt <= Date.now()) {
-    sessions.delete(token)
+    sessions.delete(tokenHash)
     return null
   }
   const user = users.find((entry) => entry.id === session.userId && !entry.disabled)
   if (!user) {
-    sessions.delete(token)
+    sessions.delete(tokenHash)
     return null
   }
   return publicUser(user)
 }
 
-export function revokeSession(token) {
-  if (typeof token === 'string') sessions.delete(token)
+export async function revokeSession(token) {
+  if (typeof token === 'string' && sessions.delete(hashSessionToken(token))) await persistSessions()
 }
 
-export function revokeUserSessions(userId) {
-  for (const [token, session] of sessions) {
-    if (session.userId === userId) sessions.delete(token)
+export async function revokeUserSessions(userId) {
+  let revoked = false
+  for (const [tokenHash, session] of sessions) {
+    if (session.userId === userId) {
+      sessions.delete(tokenHash)
+      revoked = true
+    }
   }
+  if (revoked) await persistSessions()
 }
 
 export function listUsers() {
@@ -225,7 +278,7 @@ export async function updateUser(userId, input, validDashboardIds) {
   }
   users = nextUsers
   await persistUsers()
-  if (next.disabled || input.password) revokeUserSessions(next.id)
+  if (next.disabled || input.password) await revokeUserSessions(next.id)
   return publicUser(next)
 }
 
@@ -240,5 +293,5 @@ export async function deleteUser(userId, requesterId) {
   }
   users = remaining
   await persistUsers()
-  revokeUserSessions(userId)
+  await revokeUserSessions(userId)
 }

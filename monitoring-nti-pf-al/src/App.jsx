@@ -679,7 +679,7 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
           {!sectionId && <label className="dialog-field widget-type-field"><span>Tipo de visualização</span><select value={type} onChange={(event) => { const nextType = event.target.value; setType(nextType); if (nextType !== 'timeseries') { setSelectedItemIds((current) => current.slice(0, 1)); setItemId((current) => current || String(selectedItemIds[0] || '')) } }}>
             {['network', 'topology'].includes(dashboardType) ? <><option value="availability">Host UP / DOWN</option><option value="timeseries">Gráfico temporal (até 8 itens)</option></> : <><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="metric">Valor atual</option></>}
           </select></label>}
-          {type === 'timeseries' && <label className="dialog-field widget-range-field"><span>Período do gráfico</span><select value={range} onChange={(event) => setRange(event.target.value)}><option value="15m">Últimos 15 minutos</option><option value="1h">Última hora</option><option value="6h">Últimas 6 horas</option><option value="24h">Último dia</option><option value="7d">Últimos 7 dias</option><option value="30d">Últimos 30 dias (mensal)</option></select></label>}
+          {type === 'timeseries' && <label className="dialog-field widget-range-field"><span>Período do gráfico</span><select value={range} onChange={(event) => setRange(event.target.value)}><option value="15m">Últimos 15 minutos</option><option value="1h">Última hora</option><option value="3h">Últimas 3 horas</option><option value="6h">Últimas 6 horas</option><option value="24h">Último dia</option><option value="7d">Últimos 7 dias</option><option value="30d">Últimos 30 dias (mensal)</option></select></label>}
           {type === 'availability' && dashboardType === 'topology' && <label className="dialog-field"><span>Tamanho do bloco (px)</span><input type="number" min="56" max="480" step="8" value={mapSizePx} onChange={(event) => setMapSizePx(Math.max(56, Math.min(480, Number(event.target.value) || 56)))} /><span className="dialog-hint">Largura e altura iguais. Padrão: 80 × 80 px.</span></label>}
           <label className="dialog-field widget-search-field"><span>Buscar item deste equipamento</span><input value={search} onChange={(event) => { setSearch(event.target.value); setItemPage(0); setHasMoreItems(false); setCatalog([]) }} placeholder={type === 'availability' ? 'icmpping, ping, status...' : 'CPU, memória, tráfego enviado/recebido...'} /></label>
           {type === 'timeseries' ? (
@@ -1085,14 +1085,22 @@ function App() {
     fetch('/api/auth/me', { signal: controller.signal })
       .then(async (response) => {
         const payload = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(payload.error || 'Sua sessão não está autenticada.')
+        if (!response.ok) {
+          const error = new Error(payload.error || 'Sua sessão não está autenticada.')
+          error.status = response.status
+          throw error
+        }
         setAuthUser(payload.user)
       })
       .catch((requestError) => {
         if (requestError.name !== 'AbortError') {
+          console.error('Falha ao validar a sessão inicial:', requestError)
           setAuthUser(null)
-          if (!['#/login', '#/unauthorized'].includes(window.location.hash.split('?')[0])) {
+          if (requestError.status === 401 && !['#/login', '#/unauthorized'].includes(window.location.hash.split('?')[0])) {
             window.location.hash = '#/unauthorized'
+          } else if (requestError.status !== 401 && !window.location.hash.startsWith('#/login')) {
+            setAuthError('Não foi possível verificar sua sessão. Tente novamente.')
+            window.location.hash = '#/login'
           }
         }
       })

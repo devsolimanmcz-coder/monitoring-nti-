@@ -70,6 +70,12 @@ test('persists consumption sections and their monthly chart widgets', async () =
   assert.equal(saved.dashboards[0].widgets[0].range, '30d')
 })
 
+test('accepts the three-hour history range for chart widgets', async () => {
+  const saved = await saveDashboardConfig(configWithWidget({ range: '3h' }))
+
+  assert.equal(saved.dashboards[0].widgets[0].range, '3h')
+})
+
 test('persists resizable dashboard widgets and host cards', async () => {
   const config = configWithWidget({ width: 3, height: 5 })
   config.dashboards[0].cardSizes = {

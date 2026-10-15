@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { after, test } from 'node:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -29,6 +30,33 @@ test('bootstraps a test administrator and authenticates with a revocable session
   assert.equal(getAuthenticatedUser(session.token).id, session.user.id)
 
   await assert.rejects(authenticateUser('nti', 'wrong-password', '127.0.0.2'), /Usuário ou senha inválidos/)
+})
+
+test('restores sessions after a server restart without storing raw tokens', async () => {
+  const session = await authenticateUser('nti', 'ntim4ster', '127.0.0.4')
+  const records = await readFile(path.join(temporaryDirectory, 'sessions.json'), 'utf8')
+  assert.equal(records.includes(session.token), false)
+
+  const childCode = `
+    const auth = await import(${JSON.stringify(new URL('./auth.js', import.meta.url).href)})
+    await auth.initializeAuthStore()
+    console.log(JSON.stringify(auth.getAuthenticatedUser(${JSON.stringify(session.token)})))
+  `
+  const restored = spawnSync(process.execPath, ['--input-type=module', '-e', childCode], {
+    encoding: 'utf8',
+    env: { ...process.env, APP_DATA_DIR: temporaryDirectory },
+  })
+  assert.equal(restored.status, 0, restored.stderr)
+  assert.equal(JSON.parse(restored.stdout).username, 'nti')
+
+  const { revokeSession } = await import('./auth.js')
+  await revokeSession(session.token)
+  const afterLogout = spawnSync(process.execPath, ['--input-type=module', '-e', childCode], {
+    encoding: 'utf8',
+    env: { ...process.env, APP_DATA_DIR: temporaryDirectory },
+  })
+  assert.equal(afterLogout.status, 0, afterLogout.stderr)
+  assert.equal(JSON.parse(afterLogout.stdout), null)
 })
 
 test('manages viewer access, validates password strength, and revokes disabled accounts', async () => {
