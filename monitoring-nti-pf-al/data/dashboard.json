@@ -1297,15 +1297,75 @@
       "key": "packet-loss:SINPA",
       "hostName": "SINPA",
       "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T16:32:50.807Z",
+      "lastOccurrence": "2026-10-15T16:44:57.741Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T16:45:57.339Z"
+    },
+    {
+      "id": "0803a92e-2833-4c62-b592-cc382448f9f2",
+      "key": "packet-loss:LINK-ARAPIRACA-PEP",
+      "hostName": "LINK-ARAPIRACA-PEP",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T16:39:57.300Z",
+      "lastOccurrence": "2026-10-15T16:48:58.713Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T16:49:57.266Z"
+    },
+    {
+      "id": "cc8ec062-26a7-446f-a1bd-7eb03a44a341",
+      "key": "packet-loss:DNSBSB01",
+      "hostName": "DNSBSB01",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.67%",
+      "severity": "warning",
+      "value": 1.67,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T16:40:57.517Z",
+      "lastOccurrence": "2026-10-15T16:49:57.266Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T16:50:57.583Z"
+    },
+    {
+      "id": "0df8c88c-8dec-48c8-b24d-561b0152242b",
+      "key": "packet-loss:LINK-PORTO",
+      "hostName": "LINK-PORTO",
+      "type": "packet_loss",
       "description": "Perda de pacotes acima do limite: 1.13%",
       "severity": "warning",
       "value": 1.13,
       "threshold": 1,
-      "status": "active",
-      "startedAt": "2026-10-15T16:32:50.807Z",
-      "lastOccurrence": "2026-10-15T16:37:42.335Z",
+      "status": "resolved",
+      "startedAt": "2026-10-15T16:49:57.266Z",
+      "lastOccurrence": "2026-10-15T16:50:57.583Z",
       "acknowledgedAt": null,
-      "resolvedAt": null
+      "resolvedAt": "2026-10-15T16:51:59.531Z"
+    },
+    {
+      "id": "42bdcf5d-1481-4cf7-99c8-13e7e94cc095",
+      "key": "packet-loss:SINPA",
+      "hostName": "SINPA",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T16:49:57.266Z",
+      "lastOccurrence": "2026-10-15T16:51:59.531Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T16:52:57.382Z"
     }
   ],
   "alertEvents": [
@@ -2239,11 +2299,73 @@
       "action": "opened",
       "message": "Condição anormal persistiu pelo período mínimo configurado.",
       "at": "2026-10-15T16:33:57.366Z"
+    },
+    {
+      "id": "8ce6ed94-99af-420e-8595-64115f13b0a2",
+      "alertId": "0803a92e-2833-4c62-b592-cc382448f9f2",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T16:40:57.517Z"
+    },
+    {
+      "id": "12b4b50b-2cd5-42e6-a79b-1e3f6dd5ae9b",
+      "alertId": "cc8ec062-26a7-446f-a1bd-7eb03a44a341",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T16:42:57.871Z"
+    },
+    {
+      "id": "569ff8fb-c9da-4909-a7be-fa782a36155f",
+      "alertId": "6c7f14d4-2a47-4b97-a5af-ad7006609c27",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T16:45:57.339Z"
+    },
+    {
+      "id": "3b38b0f3-650a-4b98-a9b1-1d34590f9dd0",
+      "alertId": "0803a92e-2833-4c62-b592-cc382448f9f2",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T16:49:57.266Z"
+    },
+    {
+      "id": "a42d41b2-f497-4922-b672-9de22eff6b8c",
+      "alertId": "0df8c88c-8dec-48c8-b24d-561b0152242b",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T16:50:57.583Z"
+    },
+    {
+      "id": "0ace59f8-01a5-44d5-8f5b-538da4ff1760",
+      "alertId": "42bdcf5d-1481-4cf7-99c8-13e7e94cc095",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T16:50:57.583Z"
+    },
+    {
+      "id": "e50e0bb3-16b8-4885-ae8f-fcdadc91203a",
+      "alertId": "cc8ec062-26a7-446f-a1bd-7eb03a44a341",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T16:50:57.583Z"
+    },
+    {
+      "id": "ea789bec-ad79-4a0d-80bf-b78c15972045",
+      "alertId": "0df8c88c-8dec-48c8-b24d-561b0152242b",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T16:51:59.531Z"
+    },
+    {
+      "id": "e4c76de7-2ccf-4dfb-91f8-d4359e3d088b",
+      "alertId": "42bdcf5d-1481-4cf7-99c8-13e7e94cc095",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T16:52:57.382Z"
     }
   ],
   "conditions": {
-    "packet-loss:SINPA": 1792081970807,
-    "packet-loss:LINK-MACEIO-PEP": 1792082037366,
-    "packet-loss:AERO-MCZ-PF-AL": 1792082097783
+    "packet-loss:LINK-MACEIO-PEP": 1792082997266,
+    "packet-loss:CITSMART": 1792084556006
   }
 }
