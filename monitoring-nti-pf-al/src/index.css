@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  font-family: 'DM Sans', 'Segoe UI', sans-serif;
+  color: #e8edf7;
+  background: #090d16;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --bg: #090d16;
+  --panel: #101724;
+  --panel-raised: #131d2c;
+  --border: rgba(139, 164, 198, .12);
+  --text: #e8edf7;
+  --muted: #8492a8;
+  --blue: #6aa9ff;
+  --green: #47d7a0;
+  --amber: #f2b85c;
+  --red: #ff6f7d;
+}
+
+* { box-sizing: border-box; }
+
+html { min-width: 360px; min-height: 100%; scroll-behavior: smooth; }
+
+body {
+  min-width: 360px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--bg);
+}
+
+body, button, input { font-family: 'DM Sans', 'Segoe UI', sans-serif; }
+button, input { color: inherit; }
+button { font-size: inherit; }
+a { color: inherit; text-decoration: none; }
+::selection { color: #fff; background: rgba(82, 145, 238, .4); }
+
+:focus-visible { outline: 2px solid #73aaff; outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
