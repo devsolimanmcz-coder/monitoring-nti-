@@ -15,6 +15,21 @@ import './App.css'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip)
 
+let fallbackIdCounter = 0
+
+function createId() {
+  const cryptoApi = globalThis.crypto
+  if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID()
+  if (typeof cryptoApi?.getRandomValues === 'function') {
+    const bytes = cryptoApi.getRandomValues(new Uint8Array(16))
+    bytes[6] = (bytes[6] & 0x0f) | 0x40
+    bytes[8] = (bytes[8] & 0x3f) | 0x80
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${(++fallbackIdCounter).toString(36)}`
+}
+
 const EMPTY_LAYOUT = {
   sections: [
     { id: 'network', title: 'INFRAESTRUTURA - ATIVOS DE REDE', kind: 'icmp' },
@@ -649,7 +664,7 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
     const items = type === 'timeseries' ? selectedItems : [selected]
     if (!items.length || (type === 'timeseries' && selectedItemIds.length !== items.length)) return
     onSave({
-      id: widget?.id || crypto.randomUUID(),
+      id: widget?.id || createId(),
       title: title.trim() || selected.itemName,
       type,
       ...((widget?.sectionId || sectionId) ? { sectionId: widget?.sectionId || sectionId } : {}),
@@ -1549,7 +1564,7 @@ function App() {
     if (dialog.mode === 'create') {
       updateActiveLayout((current) => ({
         ...current,
-        sections: [...current.sections, { id: crypto.randomUUID(), title: dialog.title, kind: dialog.kind }],
+        sections: [...current.sections, { id: createId(), title: dialog.title, kind: dialog.kind }],
       }))
     } else {
       updateActiveLayout((current) => ({
@@ -1596,7 +1611,7 @@ function App() {
   const createDashboard = ({ title, type }) => {
     const next = {
       ...EMPTY_LAYOUT,
-      id: `dashboard-${crypto.randomUUID()}`,
+      id: `dashboard-${createId()}`,
       title,
       type,
       favorite: false,
@@ -1621,12 +1636,12 @@ function App() {
   const duplicateDashboard = (source) => {
     const copy = {
       ...source,
-      id: `dashboard-${crypto.randomUUID()}`,
+      id: `dashboard-${createId()}`,
       title: `${source.title} (cópia)`,
       favorite: false,
       sections: source.sections.map((section) => ({ ...section })),
       assignments: { ...source.assignments },
-      widgets: source.widgets.map((widget) => ({ ...widget, id: crypto.randomUUID() })),
+      widgets: source.widgets.map((widget) => ({ ...widget, id: createId() })),
     }
     setConfig((current) => ({ ...current, dashboards: [...current.dashboards, copy] }))
   }
@@ -1683,7 +1698,7 @@ function App() {
       const sourceTop = Math.min(...mapClipboard.widgets.map((item) => item.mapY))
       const verticalOffset = destinationBottom - sourceTop
       const widgets = mapClipboard.widgets.map((widget) => {
-        return { ...widget, id: crypto.randomUUID(), mapY: widget.mapY + verticalOffset }
+        return { ...widget, id: createId(), mapY: widget.mapY + verticalOffset }
       })
       return { ...current, widgets: [...current.widgets, ...widgets] }
     })
