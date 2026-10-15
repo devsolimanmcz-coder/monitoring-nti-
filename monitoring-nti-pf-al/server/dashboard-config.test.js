@@ -31,19 +31,26 @@ function configWithWidget(widget) {
   return config
 }
 
-test('persists compact map host and chart dimensions with item keys', async () => {
-  await saveDashboardConfig(configWithWidget({ mapSizePx: 112, mapCols: 6, mapRows: 4 }))
+test('persists map pixel positions and expanded chart dimensions with item keys', async () => {
+  await saveDashboardConfig(configWithWidget({ mapSizePx: 112, mapCols: 18, mapRows: 20, mapX: 347, mapY: 219 }))
 
   const savedWidget = (await readDashboardConfig()).dashboards[0].widgets[0]
   assert.equal(savedWidget.mapSizePx, 112)
-  assert.equal(savedWidget.mapCols, 6)
-  assert.equal(savedWidget.mapRows, 4)
+  assert.equal(savedWidget.mapCols, 18)
+  assert.equal(savedWidget.mapRows, 20)
+  assert.equal(savedWidget.mapX, 347)
+  assert.equal(savedWidget.mapY, 219)
   assert.equal(savedWidget.items[0].key, 'net.if.in[eth0]')
 })
 
 test('rejects out-of-range map sizes', async () => {
   await assert.rejects(
-    saveDashboardConfig(configWithWidget({ mapSizePx: 300 })),
-    /tamanho do host deve estar entre 56 e 240 pixels/,
+    saveDashboardConfig(configWithWidget({ mapSizePx: 500 })),
+    /tamanho do host deve estar entre 56 e 480 pixels/,
   )
+})
+
+test('rejects incomplete or negative pixel positions', async () => {
+  await assert.rejects(saveDashboardConfig(configWithWidget({ mapX: 20 })), /coordenadas em pixels válidas/)
+  await assert.rejects(saveDashboardConfig(configWithWidget({ mapX: -1, mapY: 20 })), /coordenadas em pixels válidas/)
 })

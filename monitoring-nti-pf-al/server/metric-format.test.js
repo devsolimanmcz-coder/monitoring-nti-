@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { formatMetricSeries } from '../src/metric-format.js'
+import { formatMetricSeries, formatMetricSeriesGroups } from '../src/metric-format.js'
 
 test('scales bit-rate and byte-rate metrics without changing series ratios', () => {
   assert.deepEqual(formatMetricSeries([1_000_000, 2_000_000], 'bps'), {
@@ -33,4 +33,24 @@ test('leaves unknown units unchanged', () => {
     values: [30, 60],
     unit: '%',
   })
+})
+
+test('formats graph series with different units on independent scales', () => {
+  const result = formatMetricSeriesGroups([
+    { itemId: 1, originalUnit: 'bps', rawValues: [1_000_000, 2_000_000] },
+    { itemId: 2, originalUnit: '', rawValues: [10, 20] },
+    { itemId: 3, originalUnit: 'Bps', rawValues: [1_024, 2_048] },
+  ])
+
+  assert.deepEqual(result.axes.map((axis) => axis.unit), ['Mbps', '', 'KB/s'])
+  assert.deepEqual(result.series.map((item) => ({
+    itemId: item.itemId,
+    axisId: item.axisId,
+    unit: item.unit,
+    values: item.values,
+  })), [
+    { itemId: 1, axisId: 'y0', unit: 'Mbps', values: [1, 2] },
+    { itemId: 2, axisId: 'y1', unit: '', values: [10, 20] },
+    { itemId: 3, axisId: 'y2', unit: 'KB/s', values: [1, 2] },
+  ])
 })

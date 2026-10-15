@@ -100,13 +100,20 @@ function normalizeDashboard(dashboard) {
     }
     const mapSizePx = Number(widget.mapSizePx ?? 80)
     const mapCols = Number(widget.mapCols ?? 4)
-    const mapRows = Number(widget.mapRows ?? 3)
-    if (!Number.isInteger(mapSizePx) || mapSizePx < 56 || mapSizePx > 240) {
-      throw new Error('O tamanho do host deve estar entre 56 e 240 pixels.')
+    const mapRows = Number(widget.mapRows ?? 4)
+    const mapX = widget.mapX == null ? null : Number(widget.mapX)
+    const mapY = widget.mapY == null ? null : Number(widget.mapY)
+    if (!Number.isInteger(mapSizePx) || mapSizePx < 56 || mapSizePx > 480) {
+      throw new Error('O tamanho do host deve estar entre 56 e 480 pixels.')
     }
-    if (!Number.isInteger(mapCols) || mapCols < 2 || mapCols > 12
-      || !Number.isInteger(mapRows) || mapRows < 2 || mapRows > 8) {
-      throw new Error('O tamanho do gráfico deve estar entre 2 e 12 colunas e 2 e 8 linhas.')
+    if (!Number.isInteger(mapCols) || mapCols < 2 || mapCols > 24
+      || !Number.isInteger(mapRows) || mapRows < 2 || mapRows > 24) {
+      throw new Error('O tamanho do gráfico deve estar entre 2 e 24 colunas e 2 e 24 linhas.')
+    }
+    if ((mapX === null) !== (mapY === null)
+      || (mapX !== null && (!Number.isSafeInteger(mapX) || mapX < 0 || mapX > 1000000))
+      || (mapY !== null && (!Number.isSafeInteger(mapY) || mapY < 0 || mapY > 1000000))) {
+      throw new Error('A posição do indicador no mapa deve usar coordenadas em pixels válidas.')
     }
     const itemMetadata = Array.isArray(widget.items) ? widget.items : [{
       itemId: widget.itemId,
@@ -143,6 +150,8 @@ function normalizeDashboard(dashboard) {
       mapSizePx,
       mapCols,
       mapRows,
+      mapX,
+      mapY,
     }
   })
 

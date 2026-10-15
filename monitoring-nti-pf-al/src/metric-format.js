@@ -49,3 +49,46 @@ export function formatMetricSeries(values, originalUnit = '') {
 
   return { values: values.map((value) => value / divisor), unit: displayedUnit }
 }
+
+export function formatMetricSeriesGroups(series) {
+  const groups = new Map()
+  series.forEach((item, index) => {
+    const key = item.originalUnit.trim()
+    if (!groups.has(key)) {
+      groups.set(key, {
+        id: `y${groups.size}`,
+        originalUnit: item.originalUnit,
+        values: [],
+        indexes: [],
+      })
+    }
+    const group = groups.get(key)
+    group.values.push(...item.rawValues)
+    group.indexes.push(index)
+  })
+
+  for (const group of groups.values()) {
+    group.formatted = formatMetricSeries(group.values, group.originalUnit)
+  }
+
+  return {
+    series: series.map((item, index) => {
+      const group = groups.get(item.originalUnit.trim())
+      const groupIndex = group.indexes.indexOf(index)
+      const valueOffset = group.indexes
+        .slice(0, groupIndex)
+        .reduce((offset, seriesIndex) => offset + series[seriesIndex].rawValues.length, 0)
+      return {
+        ...item,
+        axisId: group.id,
+        unit: group.formatted.unit,
+        values: group.formatted.values.slice(valueOffset, valueOffset + item.rawValues.length),
+      }
+    }),
+    axes: [...groups.values()].map((group) => ({
+      id: group.id,
+      originalUnit: group.originalUnit,
+      unit: group.formatted.unit,
+    })),
+  }
+}
