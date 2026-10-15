@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  CategoryScale,
+  Chart as ChartJS,
+  Filler,
+  LineElement,
+  LinearScale,
+  PointElement,
+  Tooltip,
+} from 'chart.js'
+import { Line } from 'react-chartjs-2'
 import { formatMetricSeries } from './metric-format.js'
 import { getAvailabilityStatus } from './widget-status.js'
 import './App.css'
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip)
 
 const EMPTY_LAYOUT = {
   sections: [
@@ -286,7 +298,8 @@ function MetricWidget({ widget, data }) {
     const seriesData = data[`${range}:${itemId}`] || data[itemId]
     const history = seriesData?.history
     const points = history?.points || []
-    const values = points.map((point) => Number(point.value)).filter(Number.isFinite)
+    const validPoints = points.filter((point) => point.value !== null && point.value !== undefined && Number.isFinite(Number(point.value)))
+    const values = validPoints.map((point) => Number(point.value))
     return {
       itemId,
       itemName: seriesData?.history?.item?.itemName
@@ -294,6 +307,7 @@ function MetricWidget({ widget, data }) {
         || widget.itemName,
       originalUnit: seriesData?.history?.item?.unit || widget.items?.find((item) => item.itemId === itemId)?.unit || widget.unit,
       points,
+      validPoints,
       rawValues: values,
       error: seriesData?.error || '',
     }
@@ -312,22 +326,83 @@ function MetricWidget({ widget, data }) {
   const allValues = series.flatMap((item) => item.values)
   const min = allValues.length ? Math.min(...allValues) : 0
   const max = allValues.length ? Math.max(...allValues) : 0
-  const span = max - min || 1
   const status = widget.type === 'availability'
     ? getAvailabilityStatus(points)
     : null
   const colors = ['#67a8fa', '#f2b85c', '#b49aff', '#6fd5b0', '#ff7f87', '#6ed3d8', '#d1a5ff', '#a5d67a']
   const error = series.find((item) => item.error)?.error
   const rangeLabel = { '15m': 'últimos 15 minutos', '1h': 'última hora', '6h': 'últimas 6 horas', '24h': 'últimas 24 horas', '7d': 'últimos 7 dias' }[range] || 'última hora'
+  const chartTimes = [...new Set(series.flatMap((item) => item.validPoints.map((point) => Date.parse(point.time)).filter(Number.isFinite)))].sort((a, b) => a - b)
+  const chartData = {
+    labels: chartTimes.map((time) => new Date(time).toISOString()),
+    datasets: series.map((item, index) => {
+      const valuesByTime = new Map(item.validPoints.map((point, pointIndex) => [Date.parse(point.time), item.values[pointIndex]]))
+      return {
+        label: item.itemName,
+        data: chartTimes.map((time) => valuesByTime.get(time) ?? null),
+        borderColor: colors[index % colors.length],
+        backgroundColor: `${colors[index % colors.length]}22`,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0.32,
+        spanGaps: false,
+        fill: series.length === 1,
+      }
+    }),
+  }
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 220 },
+    interaction: { intersect: false, mode: 'index' },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#0b1421',
+        borderColor: 'rgba(139,164,198,.24)',
+        borderWidth: 1,
+        titleColor: '#e6edf7',
+        bodyColor: '#c5d3e5',
+        padding: 10,
+        callbacks: {
+          title: (items) => items[0] ? new Intl.DateTimeFormat('pt-BR', { dateStyle: range === '7d' ? 'short' : undefined, timeStyle: 'short' }).format(new Date(items[0].label)) : '',
+          label: (item) => `${item.dataset.label}: ${formatNumber(item.parsed.y, 2)} ${displayed.unit}`,
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        border: { display: false },
+        ticks: {
+          color: '#8291a6',
+          maxTicksLimit: 6,
+          maxRotation: 0,
+          callback: (value, index) => {
+            const time = chartTimes[Number(value)] || chartTimes[index]
+            if (!time) return ''
+            return new Intl.DateTimeFormat('pt-BR', { ...(range === '7d' ? { month: '2-digit', day: '2-digit' } : {}), hour: '2-digit', minute: '2-digit' }).format(new Date(time))
+          },
+        },
+      },
+      y: {
+        border: { display: false },
+        grid: { color: 'rgba(139,164,198,.1)' },
+        ticks: { color: '#8291a6', maxTicksLimit: 5, callback: (value) => formatNumber(value, 1) },
+      },
+    },
+  }
 
   return (
     <article className={`custom-widget ${status ? `availability-widget availability-${status.state}` : ''} ${widget.dashboardType === 'topology' ? 'topology-widget' : ''}`}>
-      <div className="custom-widget-heading"><div><span title={widget.hostName}>{widget.hostName}</span><h3 title={widget.title}>{widget.title}</h3></div><span className="widget-unit">{status ? 'ZABBIX' : displayed.unit || 'valor'}</span></div>
+    {widget.dashboardType !== 'topology' && <div className="custom-widget-heading"><div><span title={widget.hostName}>{widget.hostName}</span><h3 title={widget.title}>{widget.title}</h3></div><span className="widget-unit">{status ? 'ZABBIX' : displayed.unit || 'valor'}</span></div>}
       {status ? (
         widget.dashboardType === 'topology' ? (
           <div className="topology-host-node" role="status" aria-label={`${widget.hostName}: ${status.label}`} title={`${widget.hostName} · ${status.label}`}>
-            <Icon name="monitor" size={28} />
-            <strong>{widget.hostName}</strong>
+            <span className="topology-host-icon"><Icon name="monitor" size={25} /></span>
+            <strong title={widget.hostName}>{widget.hostName}</strong>
+            <small>{status.state === 'up' ? 'OK' : status.state === 'down' ? 'HOST INDISPONÍVEL' : status.label}</small>
           </div>
         ) : (
           <div className="availability-state" role="status" aria-label={`${widget.hostName}: ${status.label}`}>
@@ -340,21 +415,7 @@ function MetricWidget({ widget, data }) {
         <>
           <strong className="custom-widget-value">{latest === null ? '—' : formatNumber(latest, 2)}<small>{primary?.unit}</small></strong>
           {widget.type === 'timeseries' ? (
-            <svg className="widget-chart" viewBox="0 0 340 110" role="img" aria-label={`Histórico de ${widget.title}`}>
-              {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-                const value = max - span * ratio
-                const y = 10 + ratio * 75
-                return <g key={ratio}><line x1="43" x2="338" y1={y} y2={y} stroke="rgba(139,164,198,.14)" strokeDasharray="2 4" /><text x="0" y={y + 3} fill="#8190a5" fontSize="8">{formatNumber(value, 1)}</text></g>
-              })}
-              {series.map((item, seriesIndex) => {
-                const coordinates = item.values.map((value, index) => {
-                  const x = item.values.length < 2 ? 190 : 44 + (index / (item.values.length - 1)) * 292
-                  const y = 85 - ((value - min) / span) * 75
-                  return `${x},${y}`
-                }).join(' ')
-                return item.values.length > 1 && <polyline key={item.itemId} points={coordinates} fill="none" stroke={colors[seriesIndex % colors.length]} strokeWidth="2" vectorEffect="non-scaling-stroke" />
-              })}
-            </svg>
+            <div className="widget-chart-container" role="img" aria-label={`Histórico de ${widget.title}`}><Line data={chartData} options={chartOptions} /></div>
           ) : (
             <div className="widget-range"><span>Mínimo: {formatNumber(min, 2)}</span><span>Máximo: {formatNumber(max, 2)}</span></div>
           )}
@@ -401,7 +462,7 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType }) {
   const toggleItem = (item) => {
     const firstSelected = selectedItemDetails.find((entry) => Number(entry.itemId) === Number(selectedItemIds[0]))
     if (!selectedItemIds.includes(item.itemId) && firstSelected
-      && firstSelected.unit.trim().toLowerCase() !== item.unit.trim().toLowerCase()) {
+      && (firstSelected.unit || '').trim().toLowerCase() !== (item.unit || '').trim().toLowerCase()) {
       setSelectionWarning('Para comparar as séries no mesmo gráfico, selecione itens com a mesma unidade.')
       return
     }
@@ -492,6 +553,8 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType }) {
       items,
       range,
       mapSizePx,
+      mapCols: widget?.mapCols || 4,
+      mapRows: widget?.mapRows || 3,
       hostId: selected.hostId,
       hostName: selected.hostName,
       itemName: selected.itemName,
@@ -515,8 +578,9 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType }) {
           <label className="dialog-field"><span>Buscar item deste equipamento</span><input value={search} onChange={(event) => { setSearch(event.target.value); setItemPage(0); setHasMoreItems(false); setCatalog([]) }} placeholder={type === 'availability' ? 'icmpping, ping, status...' : 'CPU, memória, tráfego enviado/recebido...'} /></label>
           {type === 'timeseries' ? (
             <div className="dialog-field"><span>Itens do gráfico ({selectedItemIds.length}/8)</span>
-              {selectedItems.length > 0 && <div className="selected-item-list">{selectedItems.map((item) => <button key={item.itemId} type="button" onClick={() => toggleItem(item)} aria-label={`Remover ${item.itemName} do gráfico`}>{item.itemName} <Icon name="close" size={12} /></button>)}</div>}
-              <div className="item-check-list">{catalog.map((item) => <label key={item.itemId}><input type="checkbox" checked={selectedItemIds.includes(item.itemId)} disabled={!selectedItemIds.includes(item.itemId) && selectedItemIds.length >= 8} onChange={() => toggleItem(item)} /><span>{item.itemName}{item.unit ? ` (${item.unit})` : ''}</span></label>)}</div>
+              {selectedItems.length > 0 && <div className="selected-item-list" aria-label="Itens selecionados">{selectedItems.map((item) => <button key={item.itemId} type="button" onClick={() => toggleItem(item)} aria-label={`Remover ${item.itemName} do gráfico`}><span>{item.itemName}<small>{item.unit || 'sem unidade'}</small></span><Icon name="close" size={12} /></button>)}</div>}
+              <div className="item-check-list" aria-label="Itens disponíveis">{catalog.map((item) => <label key={item.itemId}><input type="checkbox" checked={selectedItemIds.includes(item.itemId)} disabled={!selectedItemIds.includes(item.itemId) && selectedItemIds.length >= 8} onChange={() => toggleItem(item)} /><span><strong>{item.itemName}</strong><small>{item.unit || 'sem unidade'} · {item.key || 'chave não informada'}</small></span></label>)}{!catalog.length && !itemsLoading && <span className="item-list-empty">Nenhum item encontrado com esse filtro.</span>}</div>
+              {hasMoreItems && <button className="catalog-more" type="button" disabled={itemsLoading} onClick={() => { setItemsLoading(true); setItemPage((current) => current + 1) }}>{itemsLoading ? 'Carregando...' : 'Carregar mais itens'}</button>}
             </div>
           ) : (
             <label className="dialog-field"><span>{type === 'availability' ? 'Item de estado (1 = UP, 0 = DOWN)' : 'Item do Zabbix'}</span><select value={itemId} onChange={(event) => { setItemId(event.target.value); setSelectedItemIds(event.target.value ? [Number(event.target.value)] : []); setTitle('') }} required><option value="">{itemsLoading ? 'Carregando itens...' : 'Selecione um item...'}</option>{selected && !catalog.some((item) => String(item.itemId) === itemId) && <option value={selected.itemId}>{selected.itemName}</option>}{catalog.map((item) => <option key={item.itemId} value={item.itemId}>{item.itemName}{item.unit ? ` (${item.unit})` : ''}</option>)}</select></label>
@@ -524,7 +588,6 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType }) {
           {selectionWarning && <p className="dialog-error" role="alert">{selectionWarning}</p>}
           {itemError && <p className="dialog-error" role="alert">{itemError}</p>}
           {!itemsLoading && !itemError && !catalog.length && <p className="dialog-hint">Nenhum item numérico disponível para este equipamento.</p>}
-          {hasMoreItems && <button className="catalog-more" type="button" disabled={itemsLoading} onClick={() => { setItemsLoading(true); setItemPage((current) => current + 1) }}>{itemsLoading ? 'Carregando...' : 'Carregar mais itens'}</button>}
         </>}
         <label className="dialog-field"><span>Título do widget</span><input value={title} maxLength={100} onChange={(event) => setTitle(event.target.value)} placeholder={selected?.itemName || 'Título personalizado'} /></label>
         {type === 'availability' && <p className="dialog-hint">Use um item como <strong>icmpping</strong> que retorna 1 quando responde e 0 quando cai. A recuperação fica amarela por 30s; quedas ficam vermelhas e oscilações frequentes amarelas.</p>}
@@ -1077,9 +1140,38 @@ function App() {
     setLayout((current) => ({
       ...current,
       widgets: current.widgets.map((widget) => widget.id === id
-        ? { ...widget, width: Math.max(1, Math.min(4, (widget.width || 1) + offset)) }
+        ? current.type === 'topology' && widget.type === 'availability'
+          ? { ...widget, mapSizePx: Math.max(56, Math.min(240, (widget.mapSizePx || 80) + offset * 16)) }
+          : current.type === 'topology'
+            ? { ...widget, mapCols: Math.max(2, Math.min(12, (widget.mapCols || 4) + offset)), mapRows: Math.max(2, Math.min(8, (widget.mapRows || 3) + offset)) }
+            : { ...widget, width: Math.max(1, Math.min(4, (widget.width || 1) + offset)) }
         : widget),
     }))
+  }
+
+  const resizeMapWidgetByDrag = (event, widget) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const startX = event.clientX
+    const startY = event.clientY
+    const startCols = widget.mapCols || 4
+    const startRows = widget.mapRows || 3
+    const updateSize = (moveEvent) => {
+      const mapCols = Math.max(2, Math.min(12, startCols + Math.round((moveEvent.clientX - startX) / 80)))
+      const mapRows = Math.max(2, Math.min(8, startRows + Math.round((moveEvent.clientY - startY) / 80)))
+      setLayout((current) => ({
+        ...current,
+        widgets: current.widgets.map((item) => item.id === widget.id ? { ...item, mapCols, mapRows } : item),
+      }))
+    }
+    const stopResize = () => {
+      window.removeEventListener('pointermove', updateSize)
+      window.removeEventListener('pointerup', stopResize)
+      window.removeEventListener('pointercancel', stopResize)
+    }
+    window.addEventListener('pointermove', updateSize)
+    window.addEventListener('pointerup', stopResize)
+    window.addEventListener('pointercancel', stopResize)
   }
 
   const acknowledgeAlert = async (alert) => {
@@ -1349,28 +1441,60 @@ function App() {
             </section>
           )}
 
-          {page === 'dashboard' && layout.widgets.length > 0 &&           <section className={`custom-widget-grid ${layout.type === 'topology' ? 'topology-map' : ''}`} aria-label={layout.type === 'topology' ? 'Mapa personalizável de rede' : 'Indicadores personalizados'}>{layout.type === 'topology' && <div className="topology-map-hint">Arraste os blocos para organizar · use − / + para ajustar o tamanho · gráficos exibem escala automática</div>}{layout.widgets.map((widget, index) => <div className={`custom-widget-wrap widget-width-${widget.width || 1} ${layout.type === 'topology' ? `map-size-${widget.width || 1}` : ''}`} key={widget.id} draggable onDragStart={(event) => event.dataTransfer.setData('text/plain', widget.id)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
-            event.preventDefault()
-            const draggedId = event.dataTransfer.getData('text/plain')
-            const fromIndex = layout.widgets.findIndex((item) => item.id === draggedId)
-            const toIndex = layout.widgets.findIndex((item) => item.id === widget.id)
-            if (fromIndex >= 0 && toIndex >= 0 && fromIndex !== toIndex) {
-              const reordered = [...layout.widgets]
-              const [dragged] = reordered.splice(fromIndex, 1)
-              reordered.splice(toIndex, 0, dragged)
-              setLayout((current) => ({ ...current, widgets: reordered }))
-            }
-          }}>
-            <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} />
-            <div className="widget-controls">
-              <button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar indicador"><Icon name="edit" size={12} /></button>
-              <button type="button" onClick={() => moveWidget(widget.id, -1)} disabled={index === 0} aria-label={`Mover ${widget.title} para esquerda`}>←</button>
-              <button type="button" onClick={() => moveWidget(widget.id, 1)} disabled={index === layout.widgets.length - 1} aria-label={`Mover ${widget.title} para direita`}>→</button>
-              <button type="button" onClick={() => resizeWidget(widget.id, -1)} disabled={(widget.width || 1) <= 1} aria-label={`Reduzir tamanho de ${widget.title}`}>−</button>
-              <button type="button" onClick={() => resizeWidget(widget.id, 1)} disabled={(widget.width || 1) >= 4} aria-label={`Aumentar tamanho de ${widget.title}`}>+</button>
-              <button type="button" onClick={() => setLayout((current) => ({ ...current, widgets: current.widgets.filter((item) => item.id !== widget.id) }))} aria-label={`Remover ${widget.title}`}><Icon name="close" size={12} /></button>
-            </div>
-          </div>)}</section>}
+          {page === 'dashboard' && layout.widgets.length > 0 && (
+            <section className={`custom-widget-grid ${layout.type === 'topology' ? 'topology-map' : ''}`} aria-label={layout.type === 'topology' ? 'Mapa personalizável de rede' : 'Indicadores personalizados'}>
+              {layout.widgets.map((widget, index) => {
+                const isTopology = layout.type === 'topology'
+                const isMapHost = isTopology && widget.type === 'availability'
+                const mapSize = widget.mapSizePx || 80
+                const mapCols = widget.mapCols || 4
+                const mapRows = widget.mapRows || 3
+                const tileSpan = Math.ceil(mapSize / 80)
+                const wrapperClass = isTopology
+                  ? `custom-widget-wrap topology-widget-wrap ${isMapHost ? 'topology-host-wrap' : 'topology-chart-wrap'}`
+                  : `custom-widget-wrap widget-width-${widget.width || 1}`
+                return (
+                  <div
+                    className={wrapperClass}
+                    style={isTopology ? {
+                      '--map-size': `${mapSize}px`,
+                      gridColumn: `span ${isMapHost ? tileSpan : mapCols}`,
+                      gridRow: `span ${isMapHost ? tileSpan : mapRows}`,
+                    } : undefined}
+                    key={widget.id}
+                    draggable
+                    onDragStart={(event) => event.dataTransfer.setData('text/plain', widget.id)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      const draggedId = event.dataTransfer.getData('text/plain')
+                      const fromIndex = layout.widgets.findIndex((item) => item.id === draggedId)
+                      const toIndex = layout.widgets.findIndex((item) => item.id === widget.id)
+                      if (fromIndex >= 0 && toIndex >= 0 && fromIndex !== toIndex) {
+                        const reordered = [...layout.widgets]
+                        const [dragged] = reordered.splice(fromIndex, 1)
+                        reordered.splice(toIndex, 0, dragged)
+                        setLayout((current) => ({ ...current, widgets: reordered }))
+                      }
+                    }}
+                  >
+                    <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} />
+                    <div className="widget-controls" role="group" aria-label={`Controles de ${widget.title}`}>
+                      <button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button>
+                      <span className="widget-control-divider" />
+                      <button type="button" onClick={() => moveWidget(widget.id, -1)} disabled={index === 0} aria-label={`Mover ${widget.title} para esquerda`} title="Mover para esquerda"><Icon name="chevron" size={14} className="chevron-left" /></button>
+                      <button type="button" onClick={() => moveWidget(widget.id, 1)} disabled={index === layout.widgets.length - 1} aria-label={`Mover ${widget.title} para direita`} title="Mover para direita"><Icon name="chevron" size={14} /></button>
+                      <span className="widget-control-divider" />
+                      <button type="button" onClick={() => resizeWidget(widget.id, -1)} disabled={isTopology ? isMapHost ? mapSize <= 56 : mapCols <= 2 : (widget.width || 1) <= 1} aria-label={`Reduzir tamanho de ${widget.title}`} title={isMapHost ? 'Diminuir bloco' : 'Diminuir tamanho'}>−</button>
+                      <button type="button" onClick={() => resizeWidget(widget.id, 1)} disabled={isTopology ? isMapHost ? mapSize >= 240 : mapCols >= 12 : (widget.width || 1) >= 4} aria-label={`Aumentar tamanho de ${widget.title}`} title={isMapHost ? 'Aumentar bloco' : 'Aumentar tamanho'}>+</button>
+                      <button type="button" className="widget-remove-button" onClick={() => setLayout((current) => ({ ...current, widgets: current.widgets.filter((item) => item.id !== widget.id) }))} aria-label={`Remover ${widget.title}`} title="Remover"><Icon name="close" size={13} /></button>
+                    </div>
+                    {isTopology && widget.type === 'timeseries' && <button className="widget-resize-handle" type="button" onPointerDown={(event) => resizeMapWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
+                  </div>
+                )
+              })}
+            </section>
+          )}
 
           {page === 'dashboard' && layout.sections.length === 0 && layout.widgets.length === 0 && (
             <section className="blank-dashboard" aria-label="Painel vazio">

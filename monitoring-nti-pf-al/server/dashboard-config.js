@@ -98,11 +98,22 @@ function normalizeDashboard(dashboard) {
     if (!['15m', '1h', '6h', '24h', '7d'].includes(range)) {
       throw new Error('Período de histórico inválido para o indicador.')
     }
+    const mapSizePx = Number(widget.mapSizePx ?? 80)
+    const mapCols = Number(widget.mapCols ?? 4)
+    const mapRows = Number(widget.mapRows ?? 3)
+    if (!Number.isInteger(mapSizePx) || mapSizePx < 56 || mapSizePx > 240) {
+      throw new Error('O tamanho do host deve estar entre 56 e 240 pixels.')
+    }
+    if (!Number.isInteger(mapCols) || mapCols < 2 || mapCols > 12
+      || !Number.isInteger(mapRows) || mapRows < 2 || mapRows > 8) {
+      throw new Error('O tamanho do gráfico deve estar entre 2 e 12 colunas e 2 e 8 linhas.')
+    }
     const itemMetadata = Array.isArray(widget.items) ? widget.items : [{
       itemId: widget.itemId,
       hostId: widget.hostId,
       hostName: widget.hostName,
       itemName: widget.itemName,
+      key: widget.key,
       unit: widget.unit,
     }]
     const items = itemMetadata
@@ -112,6 +123,7 @@ function normalizeDashboard(dashboard) {
         hostId: Number.isSafeInteger(Number(item.hostId)) && Number(item.hostId) > 0 ? Number(item.hostId) : null,
         hostName: typeof item.hostName === 'string' ? item.hostName.slice(0, 255) : '',
         itemName: typeof item.itemName === 'string' ? item.itemName.slice(0, 255) : '',
+        key: typeof item.key === 'string' ? item.key.slice(0, 255) : '',
         unit: typeof item.unit === 'string' ? item.unit.slice(0, 40) : '',
       }))
     if (items.length !== itemIds.length) throw new Error('Metadados inválidos para os itens do indicador.')
@@ -128,6 +140,9 @@ function normalizeDashboard(dashboard) {
       itemName: typeof widget.itemName === 'string' ? widget.itemName.slice(0, 255) : '',
       unit: typeof widget.unit === 'string' ? widget.unit.slice(0, 40) : '',
       width: [1, 2, 3, 4].includes(Number(widget.width)) ? Number(widget.width) : 1,
+      mapSizePx,
+      mapCols,
+      mapRows,
     }
   })
 
