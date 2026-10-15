@@ -54,3 +54,27 @@ test('rejects incomplete or negative pixel positions', async () => {
   await assert.rejects(saveDashboardConfig(configWithWidget({ mapX: 20 })), /coordenadas em pixels válidas/)
   await assert.rejects(saveDashboardConfig(configWithWidget({ mapX: -1, mapY: 20 })), /coordenadas em pixels válidas/)
 })
+
+test('starts connectivity without sections and persists manually configured sections', async () => {
+  const config = structuredClone(DEFAULT_DASHBOARD_CONFIG)
+  assert.deepEqual(config.connectivityLayout.sections, [])
+
+  config.connectivityLayout.sections = [{ id: 'links-core', title: 'Links principais', kind: 'icmp' }]
+  config.connectivityLayout.assignments = { ROUTER: 'links-core', UNKNOWN: 'not-a-section' }
+  const saved = await saveDashboardConfig(config)
+
+  assert.deepEqual(saved.connectivityLayout.sections, [{ id: 'links-core', title: 'Links principais', kind: 'icmp' }])
+  assert.deepEqual(saved.connectivityLayout.assignments, { ROUTER: 'links-core' })
+})
+
+test('starts servers without sections and persists manually configured sections', async () => {
+  const config = structuredClone(DEFAULT_DASHBOARD_CONFIG)
+  assert.deepEqual(config.serverLayout.sections, [])
+
+  config.serverLayout.sections = [{ id: 'database-servers', title: 'Servidores de banco', kind: 'servers' }]
+  config.serverLayout.assignments = { SERVER01: 'database-servers' }
+  const saved = await saveDashboardConfig(config)
+
+  assert.deepEqual(saved.serverLayout.sections, [{ id: 'database-servers', title: 'Servidores de banco', kind: 'servers' }])
+  assert.deepEqual(saved.serverLayout.assignments, { SERVER01: 'database-servers' })
+})

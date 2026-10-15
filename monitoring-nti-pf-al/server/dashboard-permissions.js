@@ -1,4 +1,30 @@
 export function assertModeratorConfigUpdate(persisted, incoming) {
+  const currentConnectivity = persisted.connectivityLayout
+  const nextConnectivity = incoming.connectivityLayout
+  if (nextConnectivity.sections.length < currentConnectivity.sections.length
+    || currentConnectivity.sections.some((section) => (
+      JSON.stringify(nextConnectivity.sections.find((item) => item.id === section.id)) !== JSON.stringify(section)
+    ))) {
+    throw new Error('Moderadores podem adicionar seções de conectividade, mas não editar nem excluir as existentes.')
+  }
+  if (JSON.stringify(nextConnectivity.hiddenIcmp) !== JSON.stringify(currentConnectivity.hiddenIcmp)
+    || currentConnectivity.orderIcmp.some((name) => !nextConnectivity.orderIcmp.includes(name))
+    || Object.keys(currentConnectivity.assignments).some((name) => !(name in nextConnectivity.assignments))) {
+    throw new Error('Moderadores podem adicionar e mover cards de conectividade, mas não removê-los.')
+  }
+  const currentServers = persisted.serverLayout
+  const nextServers = incoming.serverLayout
+  if (nextServers.sections.length < currentServers.sections.length
+    || currentServers.sections.some((section) => (
+      JSON.stringify(nextServers.sections.find((item) => item.id === section.id)) !== JSON.stringify(section)
+    ))) {
+    throw new Error('Moderadores podem adicionar seções de servidores, mas não editar nem excluir as existentes.')
+  }
+  if (JSON.stringify(nextServers.hiddenServers) !== JSON.stringify(currentServers.hiddenServers)
+    || currentServers.orderServers.some((name) => !nextServers.orderServers.includes(name))
+    || Object.keys(currentServers.assignments).some((name) => !(name in nextServers.assignments))) {
+    throw new Error('Moderadores podem adicionar e mover servidores, mas não removê-los.')
+  }
   const currentDashboards = new Map(persisted.dashboards.map((item) => [item.id, item]))
   if (incoming.dashboards.length !== currentDashboards.size
     || incoming.dashboards.some((item) => !currentDashboards.has(item.id))) {

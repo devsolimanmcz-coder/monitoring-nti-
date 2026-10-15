@@ -29,6 +29,20 @@ const EMPTY_LAYOUT = {
   widgets: [],
 }
 
+const EMPTY_CONNECTIVITY_LAYOUT = {
+  sections: [],
+  hiddenIcmp: [],
+  orderIcmp: [],
+  assignments: {},
+}
+
+const EMPTY_SERVER_LAYOUT = {
+  sections: [],
+  hiddenServers: [],
+  orderServers: [],
+  assignments: {},
+}
+
 function ConfirmDialog({ title, message, confirmLabel = 'Excluir', onCancel, onConfirm, busy = false }) {
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
@@ -95,7 +109,7 @@ function resolveMapPositions(widgets) {
   return placed
 }
 
-function orderVisible(items, order, hidden) {
+function orderVisible(items, order = [], hidden = []) {
   const positions = new Map(order.map((name, index) => [name, index]))
   return items
     .filter((item) => !hidden.includes(item.host_name))
@@ -306,7 +320,7 @@ function EmptyState({ title, detail }) {
 function HostPicker({ hosts, onAdd }) {
   const [selected, setSelected] = useState('')
 
-  if (!hosts.length) return <span className="layout-saved-note">Todos os equipamentos compatíveis já estão nesta seção</span>
+  if (!hosts.length) return <span className="layout-saved-note">Todos os equipamentos compatíveis já foram adicionados ao painel</span>
 
   return (
     <div className="host-picker">
@@ -340,7 +354,7 @@ function SectionDialog({ dialog, onClose, onSave }) {
           <button className="dialog-close" type="button" aria-label="Fechar" onClick={onClose}><Icon name="close" size={17} /></button>
         </div>
         <label className="dialog-field"><span>Nome da seção</span><input autoFocus maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex.: INFRAESTRUTURA - ATIVOS DE REDE" required /></label>
-        {dialog.mode === 'create' && (
+        {dialog.mode === 'create' && !dialog.fixedKind && (
           <label className="dialog-field"><span>Tipo de cards</span>
             <select value={kind} onChange={(event) => setKind(event.target.value)}>
               <option value="icmp">Rede e aplicações (ICMP)</option>
@@ -990,6 +1004,24 @@ function App() {
   const lastPersistedSnapshot = useRef('')
   const isAdministrator = authUser?.role === 'administrator'
   const canEditDashboard = authUser?.role === 'administrator' || authUser?.role === 'moderator'
+  const activeLayout = useMemo(() => page === 'connectivity'
+    ? { ...EMPTY_CONNECTIVITY_LAYOUT, ...config?.connectivityLayout }
+    : page === 'servers'
+      ? { ...EMPTY_SERVER_LAYOUT, ...config?.serverLayout }
+      : { ...EMPTY_LAYOUT, ...layout }, [config?.connectivityLayout, config?.serverLayout, layout, page])
+
+  const updateActiveLayout = (updater) => {
+    if (page === 'connectivity' || page === 'servers') {
+      setConfig((current) => ({
+        ...current,
+        ...(page === 'connectivity'
+          ? { connectivityLayout: updater(current.connectivityLayout || EMPTY_CONNECTIVITY_LAYOUT) }
+          : { serverLayout: updater(current.serverLayout || EMPTY_SERVER_LAYOUT) }),
+      }))
+    } else {
+      setLayout(updater)
+    }
+  }
 
   const refreshSeconds = config?.preferences?.refreshSeconds || 30
   const autoRefresh = config?.preferences?.autoRefresh !== false
@@ -1374,23 +1406,25 @@ function App() {
   }, [config?.preferences.theme])
 
   const icmpHosts = useMemo(
-    () => orderVisible(dashboard.icmp, layout.orderIcmp, layout.hiddenIcmp)
+    () => orderVisible(dashboard.icmp, activeLayout.orderIcmp, activeLayout.hiddenIcmp)
       .filter((host) => host.host_name.toLowerCase().includes(search.toLowerCase())),
-    [dashboard.icmp, layout, search],
+    [dashboard.icmp, activeLayout, search],
   )
   const servers = useMemo(
-    () => orderVisible(dashboard.servers, layout.orderServers, layout.hiddenServers)
+    () => orderVisible(dashboard.servers, activeLayout.orderServers, activeLayout.hiddenServers)
       .filter((server) => server.host_name.toLowerCase().includes(search.toLowerCase())),
-    [dashboard.servers, layout, search],
+    [dashboard.servers, activeLayout, search],
   )
   const cardsForSection = (section) => {
     const isIcmp = section.kind === 'icmp'
     const items = isIcmp ? icmpHosts : servers
-    const order = isIcmp ? layout.orderIcmp : layout.orderServers
-    const hidden = isIcmp ? layout.hiddenIcmp : layout.hiddenServers
+    const order = isIcmp ? activeLayout.orderIcmp : activeLayout.orderServers
+    const hidden = isIcmp ? activeLayout.hiddenIcmp : activeLayout.hiddenServers
     const defaultSection = isIcmp ? 'network' : 'servers'
     const assigned = items.filter((item) => (
-      (layout.assignments[item.host_name] || item.default_section_id || defaultSection) === section.id
+      page === 'connectivity'
+        ? activeLayout.assignments[item.host_name] === section.id
+        : (activeLayout.assignments[item.host_name] || item.default_section_id || defaultSection) === section.id
     ))
     return orderVisible(assigned, order, hidden)
   }
@@ -1398,26 +1432,57 @@ function App() {
   const availableForSection = (section) => {
     const isIcmp = section.kind === 'icmp'
     const items = isIcmp ? dashboard.icmp : dashboard.servers
-    const hidden = isIcmp ? layout.hiddenIcmp : layout.hiddenServers
+    const hidden = isIcmp ? activeLayout.hiddenIcmp : activeLayout.hiddenServers
+    if (page === 'connectivity' || page === 'servers') {
+      const assignedHosts = new Set(Object.keys(activeLayout.assignments))
+      return items.filter((item) => !hidden.includes(item.host_name) && !assignedHosts.has(item.host_name))
+    }
     const defaultSection = isIcmp ? 'network' : 'servers'
     const alreadyInSection = new Set(items
       .filter((item) => !hidden.includes(item.host_name)
-        && (layout.assignments[item.host_name] || item.default_section_id || defaultSection) === section.id)
+        && (activeLayout.assignments[item.host_name] || item.default_section_id || defaultSection) === section.id)
       .map((item) => item.host_name))
     return items.filter((item) => !alreadyInSection.has(item.host_name))
   }
 
   const handleRemoveCard = (kind, hostName) => {
+    if (page === 'connectivity') {
+      updateActiveLayout((current) => {
+        const assignments = { ...current.assignments }
+        delete assignments[hostName]
+        return { ...current, assignments }
+      })
+      return
+    }
+    if (page === 'servers') {
+      updateActiveLayout((current) => {
+        const assignments = { ...current.assignments }
+        if (assignments[hostName]) {
+          delete assignments[hostName]
+          return { ...current, assignments }
+        }
+        return { ...current, hiddenServers: [...new Set([...current.hiddenServers, hostName])] }
+      })
+      return
+    }
     const hiddenKey = kind === 'icmp' ? 'hiddenIcmp' : 'hiddenServers'
-    setLayout((current) => ({
+    updateActiveLayout((current) => ({
       ...current,
       [hiddenKey]: [...new Set([...current[hiddenKey], hostName])],
     }))
   }
 
   const handleAddCard = (section, hostName) => {
+    if (page === 'connectivity' || page === 'servers') {
+      updateActiveLayout((current) => ({
+        ...current,
+        ...(page === 'servers' ? { hiddenServers: current.hiddenServers.filter((name) => name !== hostName) } : {}),
+        assignments: { ...current.assignments, [hostName]: section.id },
+      }))
+      return
+    }
     const hiddenKey = section.kind === 'icmp' ? 'hiddenIcmp' : 'hiddenServers'
-    setLayout((current) => ({
+    updateActiveLayout((current) => ({
       ...current,
       [hiddenKey]: current[hiddenKey].filter((name) => name !== hostName),
       assignments: { ...current.assignments, [hostName]: section.id },
@@ -1443,7 +1508,7 @@ function App() {
     const insertAt = targetName ? Math.max(0, targetNames.indexOf(targetName)) : targetNames.length
     targetNames.splice(insertAt, 0, sourceName)
 
-    setLayout((current) => ({
+    updateActiveLayout((current) => ({
       ...current,
       [orderKey]: [...targetNames, ...current[orderKey].filter((name) => !targetNames.includes(name))],
       assignments: { ...current.assignments, [sourceName]: targetSection.id },
@@ -1452,12 +1517,12 @@ function App() {
 
   const handleSaveSection = (dialog) => {
     if (dialog.mode === 'create') {
-      setLayout((current) => ({
+      updateActiveLayout((current) => ({
         ...current,
         sections: [...current.sections, { id: crypto.randomUUID(), title: dialog.title, kind: dialog.kind }],
       }))
     } else {
-      setLayout((current) => ({
+      updateActiveLayout((current) => ({
         ...current,
         sections: current.sections.map((section) => section.id === dialog.id
           ? { ...section, title: dialog.title }
@@ -1472,9 +1537,9 @@ function App() {
       title: 'Excluir seção?',
       message: `A seção "${section.title}" será removida. Os cards associados serão realocados para outra seção do mesmo tipo, se houver.`,
       onConfirm: () => {
-        const fallback = layout.sections.find((candidate) => candidate.kind === section.kind && candidate.id !== section.id)
+        const fallback = activeLayout.sections.find((candidate) => candidate.kind === section.kind && candidate.id !== section.id)
         setConfigError('')
-        setLayout((current) => {
+        updateActiveLayout((current) => {
           const assignments = { ...current.assignments }
           for (const [hostName, sectionId] of Object.entries(assignments)) {
             if (sectionId !== section.id) continue
@@ -1756,7 +1821,7 @@ function App() {
     overview: ['Visão geral', 'Saúde operacional da infraestrutura e incidentes prioritários.'],
     dashboards: ['Painéis', 'Crie, organize e personalize painéis independentes.'],
     dashboard: [layout.title, layout.type === 'topology'
-      ? 'Mapa de infraestrutura: organize hosts e gráficos em uma grade responsiva.'
+      ? 'Arraste pela alça para posicionar cada item livremente, pixel a pixel; redimensione pelo canto.'
       : layout.type === 'network'
         ? 'Disponibilidade e tráfego de rede monitorados em tempo real.'
         : 'Painel personalizado com métricas reais do Zabbix.'],
@@ -1864,7 +1929,13 @@ function App() {
                 {mapClipboard && <button className="edit-panel-button" type="button" onClick={pasteMap}>Colar mapa · {mapClipboard.widgets.length}</button>}
               </>}
               {(page === 'overview' || page === 'dashboard' || page === 'connectivity' || page === 'servers') && <>
-                {editMode && canEditDashboard && <button className="edit-panel-button" type="button" onClick={() => setSectionDialog({ mode: 'create', title: '', kind: 'icmp' })}><Icon name="plus" size={15} />Nova seção</button>}
+                {editMode && canEditDashboard && <button className="edit-panel-button" type="button" onClick={() => setSectionDialog({
+                  mode: 'create',
+                  title: '',
+                  kind: page === 'servers' ? 'servers' : 'icmp',
+                  connectivity: page === 'connectivity',
+                  fixedKind: page === 'connectivity' || page === 'servers',
+                })}><Icon name="plus" size={15} />Nova seção</button>}
                 {canEditDashboard && <button className={`edit-panel-button ${editMode ? 'is-editing' : ''}`} type="button" onClick={() => setEditMode((value) => !value)}>
                   <Icon name={editMode ? 'check' : 'edit'} size={15} />{editMode ? 'Concluir' : 'Editar painel'}
                 </button>}
@@ -2062,7 +2133,7 @@ function App() {
             <section className="blank-dashboard" aria-label="Painel vazio">
               <span className="blank-dashboard-icon"><Icon name="dashboard" size={23} /></span>
               <h2>Seu painel está vazio</h2>
-              <p>{layout.type === 'topology' ? 'Adicione hosts e gráficos, arraste os blocos para organizar e ajuste seus tamanhos.' : 'Adicione as seções e os indicadores que deseja acompanhar.'}</p>
+              <p>{layout.type === 'topology' ? 'Adicione hosts e gráficos. Depois, arraste pela alça para posicionar cada item pixel a pixel.' : 'Adicione as seções e os indicadores que deseja acompanhar.'}</p>
               <div>
                 {layout.type !== 'topology' && <button className="edit-panel-button" type="button" onClick={() => setSectionDialog({ mode: 'create', title: '', kind: 'icmp' })}><Icon name="plus" size={15} />Adicionar seção</button>}
                 <button className="edit-panel-button" type="button" onClick={() => setWidgetDialog({})}><Icon name="plus" size={15} />{layout.type === 'topology' ? 'Adicionar host ou gráfico' : 'Adicionar indicador'}</button>
@@ -2070,14 +2141,30 @@ function App() {
             </section>
           )}
 
-          {(page === 'overview' || page === 'dashboard' || page === 'connectivity' || page === 'servers') && (page === 'connectivity'
-            ? [{ id: 'connectivity', title: 'Conectividade', kind: 'icmp' }]
-            : layout.sections.filter((section) => page === 'servers' ? section.kind === 'servers' : true)).map((section) => {
-            const sectionCards = page === 'connectivity'
-              ? orderVisible(dashboard.icmp, layout.orderIcmp, [])
-                .filter((host) => host.host_name.toLowerCase().includes(search.toLowerCase()))
+          {page === 'connectivity' && activeLayout.sections.length === 0 && (
+            <section className="blank-dashboard" aria-label="Conectividade vazia">
+              <span className="blank-dashboard-icon"><Icon name="network" size={23} /></span>
+              <h2>Conectividade começando do zero</h2>
+              <p>Crie uma seção e adicione somente os equipamentos que deseja acompanhar.</p>
+              {canEditDashboard && <button className="edit-panel-button" type="button" onClick={() => setSectionDialog({ mode: 'create', title: '', kind: 'icmp', connectivity: true, fixedKind: true })}><Icon name="plus" size={15} />Criar primeira seção</button>}
+            </section>
+          )}
+
+          {(page === 'overview' || page === 'dashboard' || page === 'connectivity' || page === 'servers') && (
+            page === 'connectivity'
+              ? activeLayout.sections
+              : page === 'servers'
+                ? (activeLayout.sections.length
+                  ? activeLayout.sections
+                  : [{ id: '__all_servers__', title: 'Servidores', kind: 'servers' }])
+                : layout.sections
+          ).map((section) => {
+            const sectionCards = page === 'servers' && section.id === '__all_servers__'
+              ? orderVisible(dashboard.servers, activeLayout.orderServers, activeLayout.hiddenServers)
+                .filter((server) => server.host_name.toLowerCase().includes(search.toLowerCase()))
               : cardsForSection(section)
             const isIcmp = section.kind === 'icmp'
+            const isVirtualServerSection = section.id === '__all_servers__'
             const sectionIcon = isIcmp ? 'network' : 'server'
             const sectionCountLabel = isIcmp ? 'sistemas' : 'hosts'
             const cardEmptyTitle = loading
@@ -2100,13 +2187,13 @@ function App() {
                   </div>
                   <div className="section-actions">
                     <span className="section-counter">{sectionCards.length} {sectionCountLabel}</span>
-                    {editMode && isAdministrator && <>
+                    {editMode && isAdministrator && !isVirtualServerSection && <>
                       <button className="section-action" type="button" aria-label={`Renomear ${section.title}`} onClick={() => setSectionDialog({ mode: 'rename', id: section.id, title: section.title, kind: section.kind })}><Icon name="edit" size={13} /></button>
                       <button className="section-action section-delete" type="button" aria-label={`Excluir ${section.title}`} onClick={() => handleDeleteSection(section)}><Icon name="trash" size={13} /></button>
                     </>}
                   </div>
                 </div>
-                {editMode && (
+                {editMode && !isVirtualServerSection && (
                   <div className="layout-toolbar">
                     <span><Icon name="grip" size={15} />Arraste os cards para reordenar ou mover entre seções compatíveis</span>
                     <HostPicker hosts={availableForSection(section)} onAdd={(name) => handleAddCard(section, name)} />

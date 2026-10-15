@@ -25,8 +25,24 @@ const defaultDashboard = () => ({
   widgets: [],
 })
 
+const defaultConnectivityLayout = () => ({
+  sections: [],
+  hiddenIcmp: [],
+  orderIcmp: [],
+  assignments: {},
+})
+
+const defaultServerLayout = () => ({
+  sections: [],
+  hiddenServers: [],
+  orderServers: [],
+  assignments: {},
+})
+
 export const DEFAULT_DASHBOARD_CONFIG = {
   dashboards: [defaultDashboard()],
+  connectivityLayout: defaultConnectivityLayout(),
+  serverLayout: defaultServerLayout(),
   activeDashboardId: 'main',
   defaultDashboardId: 'main',
   preferences: {
@@ -184,6 +200,76 @@ function normalizeDashboard(dashboard) {
   }
 }
 
+function normalizeConnectivityLayout(layout = {}) {
+  if (!layout || typeof layout !== 'object' || Array.isArray(layout)) {
+    throw new Error('Configuração da página Conectividade inválida.')
+  }
+  const sectionIds = new Set()
+  const sections = (Array.isArray(layout.sections) ? layout.sections : []).map((section) => {
+    const id = typeof section.id === 'string' ? section.id.trim() : ''
+    const title = typeof section.title === 'string' ? section.title.trim() : ''
+    if (!/^[a-zA-Z0-9_-]{1,80}$/.test(id) || !title || title.length > 100) {
+      throw new Error('Seção de conectividade inválida.')
+    }
+    if (sectionIds.has(id)) throw new Error('Os identificadores das seções de conectividade devem ser únicos.')
+    sectionIds.add(id)
+    return { id, title, kind: 'icmp' }
+  })
+  const normalizeNames = (items, field) => {
+    if (!Array.isArray(items)) throw new Error(`Campo ${field} da conectividade inválido.`)
+    return [...new Set(items.filter((item) => typeof item === 'string').map((item) => item.slice(0, 255)))]
+  }
+  const assignments = {}
+  if (layout.assignments && typeof layout.assignments === 'object' && !Array.isArray(layout.assignments)) {
+    for (const [hostName, sectionId] of Object.entries(layout.assignments)) {
+      if (typeof sectionId === 'string' && sectionIds.has(sectionId) && hostName.length <= 255) {
+        assignments[hostName] = sectionId
+      }
+    }
+  }
+  return {
+    sections,
+    hiddenIcmp: normalizeNames(layout.hiddenIcmp ?? [], 'hiddenIcmp'),
+    orderIcmp: normalizeNames(layout.orderIcmp ?? [], 'orderIcmp'),
+    assignments,
+  }
+}
+
+function normalizeServerLayout(layout = {}) {
+  if (!layout || typeof layout !== 'object' || Array.isArray(layout)) {
+    throw new Error('Configuração da página Servidores inválida.')
+  }
+  const sectionIds = new Set()
+  const sections = (Array.isArray(layout.sections) ? layout.sections : []).map((section) => {
+    const id = typeof section.id === 'string' ? section.id.trim() : ''
+    const title = typeof section.title === 'string' ? section.title.trim() : ''
+    if (!/^[a-zA-Z0-9_-]{1,80}$/.test(id) || !title || title.length > 100) {
+      throw new Error('Seção de servidores inválida.')
+    }
+    if (sectionIds.has(id)) throw new Error('Os identificadores das seções de servidores devem ser únicos.')
+    sectionIds.add(id)
+    return { id, title, kind: 'servers' }
+  })
+  const normalizeNames = (items, field) => {
+    if (!Array.isArray(items)) throw new Error(`Campo ${field} dos servidores inválido.`)
+    return [...new Set(items.filter((item) => typeof item === 'string').map((item) => item.slice(0, 255)))]
+  }
+  const assignments = {}
+  if (layout.assignments && typeof layout.assignments === 'object' && !Array.isArray(layout.assignments)) {
+    for (const [hostName, sectionId] of Object.entries(layout.assignments)) {
+      if (typeof sectionId === 'string' && sectionIds.has(sectionId) && hostName.length <= 255) {
+        assignments[hostName] = sectionId
+      }
+    }
+  }
+  return {
+    sections,
+    hiddenServers: normalizeNames(layout.hiddenServers ?? [], 'hiddenServers'),
+    orderServers: normalizeNames(layout.orderServers ?? [], 'orderServers'),
+    assignments,
+  }
+}
+
 function normalizeConfig(value) {
   if (!value || typeof value !== 'object') throw new Error('Configuração inválida.')
   const legacyDashboard = Array.isArray(value.sections)
@@ -230,6 +316,8 @@ function normalizeConfig(value) {
 
   return {
     dashboards,
+    connectivityLayout: normalizeConnectivityLayout(value.connectivityLayout),
+    serverLayout: normalizeServerLayout(value.serverLayout),
     activeDashboardId,
     defaultDashboardId,
     preferences: {
