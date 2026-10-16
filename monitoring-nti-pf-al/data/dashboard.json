@@ -1,241 +1,10 @@
 {
   "dashboards": [
     {
-      "id": "dashboard-48a68545-5267-469a-a245-7f84240db2cc",
-      "title": "jmo",
+      "id": "dashboard-1d49fdc4-5835-4712-beb5-5bdba932ce48",
+      "title": "MONITORAMENTO DE USO DOS LINKS DA SR/PF/AL",
       "type": "topology",
-      "favorite": false,
-      "sections": [],
-      "hiddenIcmp": [],
-      "hiddenServers": [],
-      "orderIcmp": [],
-      "orderServers": [],
-      "assignments": {},
-      "cardSizes": {},
-      "widgets": [
-        {
-          "id": "2a73a20c-4512-42e8-a529-67479f88b348",
-          "title": "LINK EMBRATEL MPLS",
-          "type": "timeseries",
-          "range": "6h",
-          "itemId": 61450,
-          "itemIds": [
-            61450,
-            61468
-          ],
-          "items": [
-            {
-              "itemId": 61450,
-              "hostId": 10604,
-              "hostName": "LINK MCOIP-08916",
-              "itemName": "Interface GigabitEthernet0/0/0: Bits received",
-              "key": "net.if.in[ifInOctets.1]",
-              "unit": "bps"
-            },
-            {
-              "itemId": 61468,
-              "hostId": 10604,
-              "hostName": "LINK MCOIP-08916",
-              "itemName": "Interface GigabitEthernet0/0/0: Bits sent",
-              "key": "net.if.out[ifOutOctets.1]",
-              "unit": "bps"
-            }
-          ],
-          "hostId": 10604,
-          "hostName": "LINK MCOIP-08916",
-          "itemName": "Interface GigabitEthernet0/0/0: Bits received",
-          "unit": "bps",
-          "width": 2,
-          "height": 2,
-          "mapSizePx": 80,
-          "mapCols": 9,
-          "mapRows": 4,
-          "mapX": 0,
-          "mapY": 0
-        },
-        {
-          "id": "53335e1a-147c-42e4-a2a3-4462d0ebd124",
-          "title": "LINK EMBRATEL MPLS",
-          "type": "timeseries",
-          "range": "6h",
-          "itemId": 61450,
-          "itemIds": [
-            61450,
-            61468
-          ],
-          "items": [
-            {
-              "itemId": 61450,
-              "hostId": 10604,
-              "hostName": "LINK MCOIP-08916",
-              "itemName": "Interface GigabitEthernet0/0/0: Bits received",
-              "key": "net.if.in[ifInOctets.1]",
-              "unit": "bps"
-            },
-            {
-              "itemId": 61468,
-              "hostId": 10604,
-              "hostName": "LINK MCOIP-08916",
-              "itemName": "Interface GigabitEthernet0/0/0: Bits sent",
-              "key": "net.if.out[ifOutOctets.1]",
-              "unit": "bps"
-            }
-          ],
-          "hostId": 10604,
-          "hostName": "LINK MCOIP-08916",
-          "itemName": "Interface GigabitEthernet0/0/0: Bits received",
-          "unit": "bps",
-          "width": 1,
-          "height": 2,
-          "mapSizePx": 80,
-          "mapCols": 8,
-          "mapRows": 4,
-          "mapX": 829,
-          "mapY": 0
-        },
-        {
-          "id": "98445b81-59e1-455d-bbdf-981aee9702b3",
-          "title": "ICMP ping",
-          "type": "availability",
-          "range": "1h",
-          "itemId": 73492,
-          "itemIds": [
-            73492
-          ],
-          "items": [
-            {
-              "itemId": 73492,
-              "hostId": 10776,
-              "hostName": "AP-CISCO-0BAC",
-              "itemName": "ICMP ping",
-              "key": "icmpping",
-              "unit": ""
-            }
-          ],
-          "hostId": 10776,
-          "hostName": "AP-CISCO-0BAC",
-          "itemName": "ICMP ping",
-          "unit": "",
-          "width": 1,
-          "height": 1,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 4,
-          "mapX": 1008,
-          "mapY": 426
-        }
-      ]
-    },
-    {
-      "id": "dashboard-f9988b08-3bca-43f5-a7ff-7914a6e06f31",
-      "title": "INFRA",
-      "type": "general",
-      "favorite": false,
-      "sections": [
-        {
-          "id": "263ca33f-4bce-4e9f-b186-6e947926da38",
-          "title": "INFRA",
-          "kind": "icmp"
-        }
-      ],
-      "hiddenIcmp": [],
-      "hiddenServers": [],
-      "orderIcmp": [
-        "LINK MCOIP-08916",
-        "INTERFACE-GIGA-CISCO",
-        "LINK-BASE-FICCO",
-        "LINK-PORTO",
-        "LINK-MACEIO-PEP",
-        "AERO-MCZ-PF-AL",
-        "LINK-ARAPIRACA-PEP",
-        "LINK MCOIP-08917"
-      ],
-      "orderServers": [],
-      "assignments": {
-        "LINK MCOIP-08916": "263ca33f-4bce-4e9f-b186-6e947926da38",
-        "LINK MCOIP-08917": "263ca33f-4bce-4e9f-b186-6e947926da38",
-        "INTERFACE-GIGA-CISCO": "263ca33f-4bce-4e9f-b186-6e947926da38",
-        "LINK-BASE-FICCO": "263ca33f-4bce-4e9f-b186-6e947926da38",
-        "LINK-PORTO": "263ca33f-4bce-4e9f-b186-6e947926da38",
-        "LINK-MACEIO-PEP": "263ca33f-4bce-4e9f-b186-6e947926da38",
-        "AERO-MCZ-PF-AL": "263ca33f-4bce-4e9f-b186-6e947926da38",
-        "LINK-ARAPIRACA-PEP": "263ca33f-4bce-4e9f-b186-6e947926da38"
-      },
-      "cardSizes": {},
-      "widgets": []
-    },
-    {
-      "id": "dashboard-92e86c28-5dae-45ba-be8b-924dd5ef4fc1",
-      "title": "NET",
-      "type": "general",
-      "favorite": false,
-      "sections": [],
-      "hiddenIcmp": [],
-      "hiddenServers": [],
-      "orderIcmp": [],
-      "orderServers": [],
-      "assignments": {},
-      "cardSizes": {},
-      "widgets": []
-    },
-    {
-      "id": "dashboard-f0db445f-b010-4121-9f2a-e17549092ec0",
-      "title": "consumo",
-      "type": "general",
-      "favorite": false,
-      "sections": [
-        {
-          "id": "58309576-31ba-40ac-b16b-b818cb969fb4",
-          "title": "mpls",
-          "kind": "consumption"
-        }
-      ],
-      "hiddenIcmp": [],
-      "hiddenServers": [],
-      "orderIcmp": [],
-      "orderServers": [],
-      "assignments": {},
-      "cardSizes": {},
-      "widgets": [
-        {
-          "id": "c2072fe4-9f2d-4415-b326-bfbe79bd58f6",
-          "title": "Interface GigabitEthernet0/0/0: Bits received",
-          "type": "timeseries",
-          "sectionId": "58309576-31ba-40ac-b16b-b818cb969fb4",
-          "range": "1h",
-          "itemId": 61450,
-          "itemIds": [
-            61450
-          ],
-          "items": [
-            {
-              "itemId": 61450,
-              "hostId": 10604,
-              "hostName": "LINK MCOIP-08916",
-              "itemName": "Interface GigabitEthernet0/0/0: Bits received",
-              "key": "net.if.in[ifInOctets.1]",
-              "unit": "bps"
-            }
-          ],
-          "hostId": 10604,
-          "hostName": "LINK MCOIP-08916",
-          "itemName": "Interface GigabitEthernet0/0/0: Bits received",
-          "unit": "bps",
-          "width": 2,
-          "height": 2,
-          "mapSizePx": 80,
-          "mapCols": 4,
-          "mapRows": 4,
-          "mapX": null,
-          "mapY": null
-        }
-      ]
-    },
-    {
-      "id": "dashboard-6dba49f0-d402-490e-9c47-522cd54c5170",
-      "title": "tt",
-      "type": "general",
-      "favorite": false,
+      "favorite": true,
       "sections": [],
       "hiddenIcmp": [],
       "hiddenServers": [],
@@ -250,7 +19,7 @@
     "sections": [
       {
         "id": "29803894-1678-4438-b2e9-09e8db190c1a",
-        "title": "INFRA",
+        "title": "ATIVOS DA INFRAESTRUTURA DE REDE | SR/PF/AL",
         "kind": "icmp"
       },
       {
@@ -272,25 +41,28 @@
       "LINK-MACEIO-PEP": "29803894-1678-4438-b2e9-09e8db190c1a",
       "AERO-MCZ-PF-AL": "29803894-1678-4438-b2e9-09e8db190c1a",
       "LINK-ARAPIRACA-PEP": "29803894-1678-4438-b2e9-09e8db190c1a",
-      "DNSBSB01": "6381baa8-fb2a-4183-a47d-7c7b533c05f0",
-      "DNS-SR-AL": "6381baa8-fb2a-4183-a47d-7c7b533c05f0"
+      "DNSBSB02": "29803894-1678-4438-b2e9-09e8db190c1a",
+      "PROXY-BSB": "29803894-1678-4438-b2e9-09e8db190c1a",
+      "EPOL": "6381baa8-fb2a-4183-a47d-7c7b533c05f0",
+      "INTRANET": "6381baa8-fb2a-4183-a47d-7c7b533c05f0",
+      "CITSMART": "6381baa8-fb2a-4183-a47d-7c7b533c05f0",
+      "SEI": "6381baa8-fb2a-4183-a47d-7c7b533c05f0",
+      "CATALOGO-DE-SISTEMAS": "6381baa8-fb2a-4183-a47d-7c7b533c05f0",
+      "SISTEMA-REF": "6381baa8-fb2a-4183-a47d-7c7b533c05f0",
+      "DNS-SR-AL": "29803894-1678-4438-b2e9-09e8db190c1a",
+      "DNSBSB01": "29803894-1678-4438-b2e9-09e8db190c1a"
     },
     "cardSizes": {}
   },
   "serverLayout": {
-    "sections": [
-      {
-        "id": "f2a37b9f-2e11-4ed6-9ed3-d1eccd6cb7be",
-        "title": "teosp",
-        "kind": "servers"
-      },
-      {
-        "id": "f2e510fa-1f56-4109-a72f-77906704b443",
-        "title": "tetet",
-        "kind": "servers"
-      }
+    "sections": [],
+    "hiddenServers": [
+      "SAL0013",
+      "SAL0017",
+      "SAL0016",
+      "SAL0026-PE-R7525-SNMP",
+      "SAL0027-PE-R7525-SNMP"
     ],
-    "hiddenServers": [],
     "orderServers": [
       "SAL0026-PE-R7525-SNMP",
       "SAL0027-PE-R7525-SNMP",
@@ -298,17 +70,11 @@
       "SAL0013",
       "SAL0017"
     ],
-    "assignments": {
-      "SAL0013": "f2a37b9f-2e11-4ed6-9ed3-d1eccd6cb7be",
-      "SAL0017": "f2a37b9f-2e11-4ed6-9ed3-d1eccd6cb7be",
-      "SAL0026-PE-R7525-SNMP": "f2e510fa-1f56-4109-a72f-77906704b443",
-      "SAL0016": "f2e510fa-1f56-4109-a72f-77906704b443",
-      "SAL0027-PE-R7525-SNMP": "f2e510fa-1f56-4109-a72f-77906704b443"
-    },
+    "assignments": {},
     "cardSizes": {}
   },
-  "activeDashboardId": "dashboard-48a68545-5267-469a-a245-7f84240db2cc",
-  "defaultDashboardId": "dashboard-48a68545-5267-469a-a245-7f84240db2cc",
+  "activeDashboardId": "dashboard-1d49fdc4-5835-4712-beb5-5bdba932ce48",
+  "defaultDashboardId": "dashboard-1d49fdc4-5835-4712-beb5-5bdba932ce48",
   "preferences": {
     "autoRefresh": true,
     "refreshSeconds": 30,
@@ -1366,6 +1132,186 @@
       "lastOccurrence": "2026-10-15T16:51:59.531Z",
       "acknowledgedAt": null,
       "resolvedAt": "2026-10-15T16:52:57.382Z"
+    },
+    {
+      "id": "24f0e301-7cd8-43d6-a304-902f401c215e",
+      "key": "host-offline:LINK-ARAPIRACA-PEP",
+      "hostName": "LINK-ARAPIRACA-PEP",
+      "type": "host_unavailable",
+      "description": "Equipamento indisponível via ICMP",
+      "severity": "critical",
+      "value": 0,
+      "threshold": 1,
+      "status": "acknowledged",
+      "startedAt": "2026-10-15T22:13:06.701Z",
+      "lastOccurrence": "2026-10-16T00:30:09.547Z",
+      "acknowledgedAt": "2026-10-15T22:47:20.222Z",
+      "resolvedAt": null
+    },
+    {
+      "id": "6ee32486-b749-4fed-986d-df837f890ad6",
+      "key": "packet-loss:LINK-ARAPIRACA-PEP",
+      "hostName": "LINK-ARAPIRACA-PEP",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 100.00%",
+      "severity": "critical",
+      "value": 100,
+      "threshold": 1,
+      "status": "acknowledged",
+      "startedAt": "2026-10-15T22:13:06.701Z",
+      "lastOccurrence": "2026-10-16T00:30:09.547Z",
+      "acknowledgedAt": "2026-10-15T22:47:19.711Z",
+      "resolvedAt": null
+    },
+    {
+      "id": "46a4692c-b164-4c7f-b695-ef8aed8133fc",
+      "key": "packet-loss:SISTEMA-REF",
+      "hostName": "SISTEMA-REF",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T22:31:08.371Z",
+      "lastOccurrence": "2026-10-15T22:36:51.715Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T22:37:08.408Z"
+    },
+    {
+      "id": "634e1375-8114-4b6a-b2db-a826bf38cd03",
+      "key": "packet-loss:LINK-MACEIO-PEP",
+      "hostName": "LINK-MACEIO-PEP",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T23:03:09.718Z",
+      "lastOccurrence": "2026-10-15T23:12:16.450Z",
+      "acknowledgedAt": "2026-10-15T23:09:37.751Z",
+      "resolvedAt": "2026-10-15T23:12:47.061Z"
+    },
+    {
+      "id": "b7a8ffdb-13a6-4585-a57a-1d47bc5d4045",
+      "key": "packet-loss:LINK-MACEIO-PEP",
+      "hostName": "LINK-MACEIO-PEP",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.12%",
+      "severity": "warning",
+      "value": 1.12,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T23:40:09.638Z",
+      "lastOccurrence": "2026-10-15T23:41:09.659Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T23:42:09.662Z"
+    },
+    {
+      "id": "646fa3b9-1129-4215-86a2-b09599304af9",
+      "key": "packet-loss:LINK-MACEIO-PEP",
+      "hostName": "LINK-MACEIO-PEP",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.12%",
+      "severity": "warning",
+      "value": 1.12,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T23:47:19.232Z",
+      "lastOccurrence": "2026-10-15T23:49:19.746Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T23:49:49.498Z"
+    },
+    {
+      "id": "3a5af6c5-c7df-4e73-9a77-0bcef6ea276b",
+      "key": "packet-loss:SIGEPOL",
+      "hostName": "SIGEPOL",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T23:47:19.232Z",
+      "lastOccurrence": "2026-10-15T23:48:50.605Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T23:49:19.746Z"
+    },
+    {
+      "id": "439daa61-17d6-41b2-8e3a-85d5330e32b5",
+      "key": "packet-loss:DNSBSB01",
+      "hostName": "DNSBSB01",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.13%",
+      "severity": "warning",
+      "value": 1.13,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T23:51:21.045Z",
+      "lastOccurrence": "2026-10-15T23:56:53.418Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T23:57:20.250Z"
+    },
+    {
+      "id": "c69b5008-e0be-46fe-bf04-283e03f69158",
+      "key": "packet-loss:EPOL",
+      "hostName": "EPOL",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-15T23:50:50.218Z",
+      "lastOccurrence": "2026-10-15T23:58:50.023Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-15T23:59:19.502Z"
+    },
+    {
+      "id": "c05cdc7a-37f8-47d2-bb75-ef7e4094c377",
+      "key": "packet-loss:DNSBSB01",
+      "hostName": "DNSBSB01",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.11%",
+      "severity": "warning",
+      "value": 1.11,
+      "threshold": 1,
+      "status": "resolved",
+      "startedAt": "2026-10-16T00:18:19.620Z",
+      "lastOccurrence": "2026-10-16T00:26:05.569Z",
+      "acknowledgedAt": null,
+      "resolvedAt": "2026-10-16T00:27:06.390Z"
+    },
+    {
+      "id": "bde8aa9b-917f-4e88-92c2-60ea4531873f",
+      "key": "packet-loss:SIGEPOL",
+      "hostName": "SIGEPOL",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 3.33%",
+      "severity": "critical",
+      "value": 3.33,
+      "threshold": 1,
+      "status": "active",
+      "startedAt": "2026-10-16T00:23:02.541Z",
+      "lastOccurrence": "2026-10-16T00:30:09.547Z",
+      "acknowledgedAt": null,
+      "resolvedAt": null
+    },
+    {
+      "id": "1b1f4083-be93-4c0a-8229-8a087ac992fb",
+      "key": "packet-loss:DNSBSB02",
+      "hostName": "DNSBSB02",
+      "type": "packet_loss",
+      "description": "Perda de pacotes acima do limite: 1.13%",
+      "severity": "warning",
+      "value": 1.13,
+      "threshold": 1,
+      "status": "active",
+      "startedAt": "2026-10-16T00:28:07.406Z",
+      "lastOccurrence": "2026-10-16T00:30:09.547Z",
+      "acknowledgedAt": null,
+      "resolvedAt": null
     }
   ],
   "alertEvents": [
@@ -2362,10 +2308,173 @@
       "action": "resolved",
       "message": "Condição normalizada automaticamente.",
       "at": "2026-10-15T16:52:57.382Z"
+    },
+    {
+      "id": "fdae9e7b-82fb-4401-b26a-5f4a8be1f143",
+      "alertId": "24f0e301-7cd8-43d6-a304-902f401c215e",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T22:14:08.350Z"
+    },
+    {
+      "id": "554e6c2a-7643-4591-87f4-9d70f70ff653",
+      "alertId": "6ee32486-b749-4fed-986d-df837f890ad6",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T22:14:08.350Z"
+    },
+    {
+      "id": "01404516-c268-413e-97f6-14e4ebdfce9d",
+      "alertId": "46a4692c-b164-4c7f-b695-ef8aed8133fc",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T22:32:20.471Z"
+    },
+    {
+      "id": "7b949b63-3c90-44e8-b67d-893ff9908a95",
+      "alertId": "46a4692c-b164-4c7f-b695-ef8aed8133fc",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T22:37:08.408Z"
+    },
+    {
+      "id": "1792104439711-6ee32486-b749-4fed-986d-df837f890ad6",
+      "alertId": "6ee32486-b749-4fed-986d-df837f890ad6",
+      "action": "acknowledged",
+      "message": "Alerta reconhecido pelo operador.",
+      "at": "2026-10-15T22:47:19.711Z"
+    },
+    {
+      "id": "1792104440222-24f0e301-7cd8-43d6-a304-902f401c215e",
+      "alertId": "24f0e301-7cd8-43d6-a304-902f401c215e",
+      "action": "acknowledged",
+      "message": "Alerta reconhecido pelo operador.",
+      "at": "2026-10-15T22:47:20.222Z"
+    },
+    {
+      "id": "0e1977cc-5a83-4cce-bbe6-955fa15bd08a",
+      "alertId": "634e1375-8114-4b6a-b2db-a826bf38cd03",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T23:05:09.631Z"
+    },
+    {
+      "id": "1792105777751-634e1375-8114-4b6a-b2db-a826bf38cd03",
+      "alertId": "634e1375-8114-4b6a-b2db-a826bf38cd03",
+      "action": "acknowledged",
+      "message": "Alerta reconhecido pelo operador.",
+      "at": "2026-10-15T23:09:37.751Z"
+    },
+    {
+      "id": "9dc738bd-c0cd-43cf-bb15-72999e78aa36",
+      "alertId": "634e1375-8114-4b6a-b2db-a826bf38cd03",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T23:12:47.061Z"
+    },
+    {
+      "id": "42230783-e24a-4241-9f11-e8733162581f",
+      "alertId": "b7a8ffdb-13a6-4585-a57a-1d47bc5d4045",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T23:41:09.659Z"
+    },
+    {
+      "id": "a01c9600-6dab-465f-999a-3eddd44c3178",
+      "alertId": "b7a8ffdb-13a6-4585-a57a-1d47bc5d4045",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T23:42:09.662Z"
+    },
+    {
+      "id": "68e10f0d-eebb-42eb-b1c9-648deb1a2d45",
+      "alertId": "646fa3b9-1129-4215-86a2-b09599304af9",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T23:48:19.669Z"
+    },
+    {
+      "id": "9147588e-3a9c-4d90-a4bb-963cc6a9193e",
+      "alertId": "3a5af6c5-c7df-4e73-9a77-0bcef6ea276b",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T23:48:19.669Z"
+    },
+    {
+      "id": "4975a9c9-e169-4c09-afe6-ffa6751d6ce2",
+      "alertId": "3a5af6c5-c7df-4e73-9a77-0bcef6ea276b",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T23:49:19.746Z"
+    },
+    {
+      "id": "8a515985-a549-4db7-8a16-810017cb6cc3",
+      "alertId": "646fa3b9-1129-4215-86a2-b09599304af9",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T23:49:49.498Z"
+    },
+    {
+      "id": "8acd0f36-a293-4dcd-bea7-6693f717eb8b",
+      "alertId": "439daa61-17d6-41b2-8e3a-85d5330e32b5",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T23:52:22.307Z"
+    },
+    {
+      "id": "641c64c7-09e6-4b07-867b-4bd3d3c944b8",
+      "alertId": "c69b5008-e0be-46fe-bf04-283e03f69158",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-15T23:52:22.307Z"
+    },
+    {
+      "id": "7d875ebc-8301-4943-8296-a3dab1d0b7cc",
+      "alertId": "439daa61-17d6-41b2-8e3a-85d5330e32b5",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T23:57:20.250Z"
+    },
+    {
+      "id": "ead23d83-c43a-4926-aece-376ec43361e0",
+      "alertId": "c69b5008-e0be-46fe-bf04-283e03f69158",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-15T23:59:19.502Z"
+    },
+    {
+      "id": "ea3b0d36-e8e7-40ae-84cd-bc9604da4d0e",
+      "alertId": "c05cdc7a-37f8-47d2-bb75-ef7e4094c377",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-16T00:19:19.629Z"
+    },
+    {
+      "id": "25ca91e7-ef5b-4e9c-82e9-7be98f204955",
+      "alertId": "bde8aa9b-917f-4e88-92c2-60ea4531873f",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-16T00:24:03.416Z"
+    },
+    {
+      "id": "abb6e72e-cf7a-44aa-afc7-d783f38c2ca3",
+      "alertId": "c05cdc7a-37f8-47d2-bb75-ef7e4094c377",
+      "action": "resolved",
+      "message": "Condição normalizada automaticamente.",
+      "at": "2026-10-16T00:27:06.390Z"
+    },
+    {
+      "id": "286ed1c8-255a-43a5-8b08-394404e6c785",
+      "alertId": "1b1f4083-be93-4c0a-8229-8a087ac992fb",
+      "action": "opened",
+      "message": "Condição anormal persistiu pelo período mínimo configurado.",
+      "at": "2026-10-16T00:29:08.449Z"
     }
   ],
   "conditions": {
-    "packet-loss:LINK-MACEIO-PEP": 1792082997266,
-    "packet-loss:CITSMART": 1792084556006
+    "host-offline:LINK-ARAPIRACA-PEP": 1792102386701,
+    "packet-loss:LINK-ARAPIRACA-PEP": 1792102386701,
+    "packet-loss:SIGEPOL": 1792110182541,
+    "packet-loss:DNSBSB02": 1792110487406
   }
 }

@@ -533,7 +533,7 @@ function MetricWidget({ widget, data }) {
         <>
           {widget.type === 'timeseries' ? (
             <>
-              {latest !== null && <div className="timeseries-current-value">{formatNumber(latest, 2)} <small>{primary?.unit}</small></div>}
+              {/* {latest !== null && <div className="timeseries-current-value">{formatNumber(latest, 2)} <small>{primary?.unit}</small></div>} */}
               <div className="widget-chart-container" role="img" aria-label={`Histórico de ${widget.title}`}>
                 {chartTimes.length
                   ? <Line data={chartData} options={chartOptions} />
