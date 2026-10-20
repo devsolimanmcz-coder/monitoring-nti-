@@ -1,12 +1,24 @@
 import assert from 'node:assert/strict'
 import { after, test } from 'node:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { createTestDatabase } from './test-database.js'
 
 const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'monitoring-dashboard-config-'))
 process.env.APP_DATA_DIR = temporaryDirectory
-const { DEFAULT_DASHBOARD_CONFIG, readDashboardConfig, saveDashboardConfig } = await import('./dashboard-config.js')
+const { setApplicationDatabaseForTests } = await import('./app-database.js')
+const testDatabase = createTestDatabase()
+setApplicationDatabaseForTests(testDatabase)
+const {
+  DEFAULT_DASHBOARD_CONFIG,
+  readDashboardConfig,
+  saveDashboardConfig,
+  updateDashboardConfig,
+} = await import('./dashboard-config.js')
+const legacyConfig = structuredClone(DEFAULT_DASHBOARD_CONFIG)
+legacyConfig.dashboards[0].title = 'Imported dashboard configuration'
+await writeFile(path.join(temporaryDirectory, 'dashboard.json'), JSON.stringify(legacyConfig))
 
 after(async () => {
   await rm(temporaryDirectory, { recursive: true, force: true })
@@ -30,6 +42,17 @@ function configWithWidget(widget) {
   }]
   return config
 }
+
+test('imports the existing dashboard JSON into the application database', async () => {
+  const imported = await readDashboardConfig()
+  assert.equal(imported.dashboards[0].title, 'Imported dashboard configuration')
+})
+
+test('does not rewrite an unchanged dashboard configuration', async () => {
+  const writesBefore = testDatabase.getDashboardUpsertCount()
+  await updateDashboardConfig((config) => config)
+  assert.equal(testDatabase.getDashboardUpsertCount(), writesBefore)
+})
 
 test('persists map pixel positions and expanded chart dimensions with item keys', async () => {
   await saveDashboardConfig(configWithWidget({ mapSizePx: 112, mapCols: 18, mapRows: 20, mapX: 347, mapY: 219 }))

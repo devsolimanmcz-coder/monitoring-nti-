@@ -245,6 +245,8 @@
 .config-error strong { color: #f1d28e; }
 .config-error span { color: #c8ad78; }
 .config-error button { color: #cfb578; border-color: rgba(242,184,92,.2); }
+.config-retry-button { display: inline-flex; align-items: center; gap: 6px; width: fit-content; padding: 5px 8px; margin-top: 5px; color: #f1d28e; background: rgba(242,184,92,.08); border: 1px solid rgba(242,184,92,.2); border-radius: 6px; font-size: 9px; cursor: pointer; }
+.config-retry-button:hover { background: rgba(242,184,92,.16); }
 
 @media (min-width: 1600px) {
   .dashboard-body { padding: 40px 48px 26px; }

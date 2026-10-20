@@ -1,9 +1,9 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { getApplicationDatabase, initializeApplicationDatabase } from './app-database.js'
 
 const dataDirectory = path.resolve(process.env.APP_DATA_DIR || 'data')
-const configPath = path.join(dataDirectory, 'dashboard.json')
+const legacyConfigPath = path.join(dataDirectory, 'dashboard.json')
 let updateQueue = Promise.resolve()
 
 const defaultSections = [
@@ -370,25 +370,38 @@ function normalizeConfig(value) {
 }
 
 export async function readDashboardConfig() {
+  await initializeApplicationDatabase()
+  const database = getApplicationDatabase()
+  const [rows] = await database.execute(
+    'SELECT payload FROM app_dashboard_config WHERE config_id = 1',
+  )
+  if (rows.length) return normalizeConfig(JSON.parse(rows[0].payload))
+
+  let initialConfig = structuredClone(DEFAULT_DASHBOARD_CONFIG)
   try {
-    const content = await readFile(configPath, 'utf8')
-    return normalizeConfig(JSON.parse(content))
+    initialConfig = normalizeConfig(JSON.parse(await readFile(legacyConfigPath, 'utf8')))
   } catch (error) {
-    if (error.code === 'ENOENT') return structuredClone(DEFAULT_DASHBOARD_CONFIG)
-    throw error
+    if (error.code !== 'ENOENT') throw error
   }
+
+  await database.execute(
+    'INSERT IGNORE INTO app_dashboard_config (config_id, payload) VALUES (1, ?)',
+    [JSON.stringify(initialConfig)],
+  )
+  const [importedRows] = await database.execute(
+    'SELECT payload FROM app_dashboard_config WHERE config_id = 1',
+  )
+  return normalizeConfig(JSON.parse(importedRows[0].payload))
 }
 
 export async function saveDashboardConfig(value) {
   const normalized = normalizeConfig(value)
-  await mkdir(dataDirectory, { recursive: true })
-
-  const tempPath = path.join(dataDirectory, `dashboard.${randomUUID()}.tmp`)
-  await writeFile(tempPath, `${JSON.stringify(normalized, null, 2)}\n`, {
-    encoding: 'utf8',
-    mode: 0o600,
-  })
-  await rename(tempPath, configPath)
+  await initializeApplicationDatabase()
+  await getApplicationDatabase().execute(
+    `INSERT INTO app_dashboard_config (config_id, payload) VALUES (1, ?)
+     ON DUPLICATE KEY UPDATE payload = VALUES(payload)`,
+    [JSON.stringify(normalized)],
+  )
 
   return normalized
 }
@@ -396,7 +409,10 @@ export async function saveDashboardConfig(value) {
 export function updateDashboardConfig(updater) {
   const operation = updateQueue.then(async () => {
     const current = await readDashboardConfig()
-    return saveDashboardConfig(await updater(current))
+    const currentSnapshot = JSON.stringify(current)
+    const updated = normalizeConfig(await updater(current))
+    if (JSON.stringify(updated) === currentSnapshot) return updated
+    return saveDashboardConfig(updated)
   })
   updateQueue = operation.catch(() => undefined)
   return operation

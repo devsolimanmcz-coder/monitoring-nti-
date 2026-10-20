@@ -26,6 +26,11 @@ import {
   updateDashboardConfig,
 } from './dashboard-config.js'
 import { assertModeratorConfigUpdate } from './dashboard-permissions.js'
+import {
+  closeApplicationDatabase,
+  getApplicationDatabase,
+  initializeApplicationDatabase,
+} from './app-database.js'
 
 const app = express()
 app.use(express.json({ limit: '1mb' }))
@@ -217,19 +222,37 @@ app.delete('/api/users/:userId', requireAuth, requireRole('administrator'), asyn
 })
 
 app.get('/api/health', async (_request, response) => {
-  try {
-    await getPool().query('SELECT 1')
-    response.json({ status: 'ok', database: 'connected' })
-  } catch (error) {
-    console.error('Health check do banco falhou:', error.message)
-    response.status(503).json({
-      status: 'error',
-      database: 'unavailable',
-      error: error.message.startsWith('Configuração ausente')
-        ? error.message
-        : 'Não foi possível conectar ao banco de monitoramento.',
-    })
+  const checks = await Promise.allSettled([
+    Promise.resolve().then(() => getPool().query('SELECT 1')),
+    Promise.resolve().then(() => getApplicationDatabase().query('SELECT 1')),
+  ])
+  const [zabbixCheck, applicationCheck] = checks
+  if (zabbixCheck.status === 'rejected') {
+    console.error('Health check do banco Zabbix falhou:', zabbixCheck.reason.message)
   }
+  if (applicationCheck.status === 'rejected') {
+    console.error('Health check do banco da aplicação falhou:', applicationCheck.reason.message)
+  }
+  const zabbixDatabase = zabbixCheck.status === 'fulfilled' ? 'connected' : 'unavailable'
+  const applicationDatabase = applicationCheck.status === 'fulfilled' ? 'connected' : 'unavailable'
+  const errors = []
+  if (zabbixCheck.status === 'rejected') {
+    errors.push(zabbixCheck.reason.message.startsWith('Configuração ausente')
+      ? zabbixCheck.reason.message
+      : 'Não foi possível conectar ao banco do Zabbix; confira as configurações DB_*.')
+  }
+  if (applicationCheck.status === 'rejected') {
+    errors.push(applicationCheck.reason.message.startsWith('Configuração ausente')
+      ? applicationCheck.reason.message
+      : 'Não foi possível conectar ao banco da aplicação; confira as configurações APP_DB_*.')
+  }
+  const status = errors.length ? 'error' : 'ok'
+  response.status(errors.length ? 503 : 200).json({
+    status,
+    zabbixDatabase,
+    applicationDatabase,
+    ...(errors.length ? { errors } : {}),
+  })
 })
 
 app.get('/api/dashboard-config', requireAuth, async (request, response) => {
@@ -261,7 +284,7 @@ app.put('/api/dashboard-config', requireAuth, requireRole('administrator', 'mode
     console.error('Salvamento da configuração do dashboard falhou:', error.message)
     response.status(error.code ? 500 : 400).json({
       error: error.code
-        ? 'Não foi possível salvar a configuração do painel no armazenamento local.'
+        ? 'Não foi possível salvar a configuração do painel no banco da aplicação.'
         : error.message || 'Não foi possível salvar a configuração do painel.',
     })
   }
@@ -500,7 +523,14 @@ app.get('/api/dashboard', requireAuth, async (request, response) => {
         disks: disksByHost.get(row.host_name) || [],
       })),
     }
-    const savedConfig = await updateDashboardConfig((config) => evaluateAlerts(config, dashboard))
+    let savedConfig
+    try {
+      savedConfig = await updateDashboardConfig((config) => evaluateAlerts(config, dashboard))
+    } catch (error) {
+      console.error('Persistência dos alertas no banco da aplicação falhou:', error.message)
+      response.status(503).json({ error: 'Falha ao salvar o estado dos alertas no banco da aplicação.' })
+      return
+    }
     const responseDashboard = {
       ...dashboard,
       alerts: savedConfig.alerts,
@@ -530,7 +560,9 @@ app.get('/api/dashboard', requireAuth, async (request, response) => {
   }
 })
 
+await initializeApplicationDatabase()
 await initializeAuthStore()
+await readDashboardConfig()
 
 const server = app.listen(port, host, () => {
   console.log(`API de monitoramento disponível em http://${host}:${port}`)
@@ -544,6 +576,7 @@ async function shutdown(signal) {
       process.exitCode = 1
     }
     if (pool) await pool.end()
+    await closeApplicationDatabase()
   })
 }
 

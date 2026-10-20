@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
 import { after, test } from 'node:test'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { createTestDatabase } from './test-database.js'
 
 const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'monitoring-auth-'))
 process.env.APP_DATA_DIR = temporaryDirectory
+const testDatabase = createTestDatabase()
+const { setApplicationDatabaseForTests } = await import('./app-database.js')
+setApplicationDatabaseForTests(testDatabase)
 const {
   addUser,
   authenticateUser,
@@ -32,31 +35,35 @@ test('bootstraps a test administrator and authenticates with a revocable session
   await assert.rejects(authenticateUser('nti', 'wrong-password', '127.0.0.2'), /Usuário ou senha inválidos/)
 })
 
-test('restores sessions after a server restart without storing raw tokens', async () => {
+test('persists session hashes without storing raw tokens', async () => {
+  const [beforeLogin] = await testDatabase.query(
+    'SELECT token_hash, user_id, expires_at FROM app_sessions',
+  )
   const session = await authenticateUser('nti', 'ntim4ster', '127.0.0.4')
-  const records = await readFile(path.join(temporaryDirectory, 'sessions.json'), 'utf8')
-  assert.equal(records.includes(session.token), false)
-
-  const childCode = `
-    const auth = await import(${JSON.stringify(new URL('./auth.js', import.meta.url).href)})
-    await auth.initializeAuthStore()
-    console.log(JSON.stringify(auth.getAuthenticatedUser(${JSON.stringify(session.token)})))
-  `
-  const restored = spawnSync(process.execPath, ['--input-type=module', '-e', childCode], {
-    encoding: 'utf8',
-    env: { ...process.env, APP_DATA_DIR: temporaryDirectory },
-  })
-  assert.equal(restored.status, 0, restored.stderr)
-  assert.equal(JSON.parse(restored.stdout).username, 'nti')
+  const [records] = await testDatabase.query(
+    'SELECT token_hash, user_id, expires_at FROM app_sessions',
+  )
+  assert.equal(records.length, beforeLogin.length + 1)
+  assert.equal(records.some((record) => record.token_hash === session.token), false)
+  assert.equal(getAuthenticatedUser(session.token).username, 'nti')
 
   const { revokeSession } = await import('./auth.js')
   await revokeSession(session.token)
-  const afterLogout = spawnSync(process.execPath, ['--input-type=module', '-e', childCode], {
-    encoding: 'utf8',
-    env: { ...process.env, APP_DATA_DIR: temporaryDirectory },
-  })
-  assert.equal(afterLogout.status, 0, afterLogout.stderr)
-  assert.equal(JSON.parse(afterLogout.stdout), null)
+  const [afterLogout] = await testDatabase.query(
+    'SELECT token_hash, user_id, expires_at FROM app_sessions',
+  )
+  assert.equal(afterLogout.length, beforeLogin.length)
+})
+
+test('does not lose accounts created concurrently', async () => {
+  const validDashboardIds = new Set()
+  await Promise.all([
+    addUser({ username: 'parallel-one', password: 'senha-paralela-123', role: 'moderator' }, validDashboardIds),
+    addUser({ username: 'parallel-two', password: 'senha-paralela-456', role: 'moderator' }, validDashboardIds),
+  ])
+
+  assert.equal(listUsers().some((user) => user.username === 'parallel-one'), true)
+  assert.equal(listUsers().some((user) => user.username === 'parallel-two'), true)
 })
 
 test('manages viewer access, validates password strength, and revokes disabled accounts', async () => {
@@ -86,6 +93,10 @@ test('manages viewer access, validates password strength, and revokes disabled a
   const updated = await updateUser(viewer.id, { disabled: true }, validDashboardIds)
   assert.equal(updated.disabled, true)
   assert.equal(getAuthenticatedUser(session.token), null)
+  const [remainingSessions] = await testDatabase.query(
+    'SELECT token_hash, user_id, expires_at FROM app_sessions',
+  )
+  assert.equal(remainingSessions.some((record) => record.user_id === viewer.id), false)
   assert.equal(listUsers().some((user) => user.username === 'viewer'), true)
   await deleteUser(viewer.id, 'builtin-nti-admin')
   assert.equal(listUsers().some((user) => user.username === 'viewer'), false)

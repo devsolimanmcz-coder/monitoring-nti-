@@ -1019,6 +1019,9 @@ function App() {
   const [editMode, setEditMode] = useState(false)
   const [layout, setLayout] = useState(EMPTY_LAYOUT)
   const [layoutLoaded, setLayoutLoaded] = useState(false)
+  const [configLoading, setConfigLoading] = useState(true)
+  const [configReload, setConfigReload] = useState(0)
+  const [configOwnerId, setConfigOwnerId] = useState(null)
   const [config, setConfig] = useState(null)
   const [page, setPage] = useState('overview')
   const [sidebarHidden, setSidebarHidden] = useState(false)
@@ -1136,6 +1139,8 @@ function App() {
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Não foi possível entrar.')
+      setConfigLoading(true)
+      setConfigOwnerId(null)
       setAuthUser(payload.user)
       const nextRoute = payload.user.role === 'view'
         ? payload.user.dashboardIds[0] ? `#/dashboard/${payload.user.dashboardIds[0]}` : '#/unauthorized'
@@ -1156,6 +1161,8 @@ function App() {
     } finally {
       setAuthUser(null)
       setConfig(null)
+      setConfigOwnerId(null)
+      setConfigLoading(true)
       setLayoutLoaded(false)
       window.location.hash = '#/unauthorized'
     }
@@ -1183,7 +1190,7 @@ function App() {
   }, [authUser, autoRefresh, refreshSeconds, loadDashboard])
 
   useEffect(() => {
-    if (!authUser || page !== 'dashboard' || !widgetItemIdsKey) return undefined
+    if (!authUser || configOwnerId !== authUser.id || page !== 'dashboard' || !widgetItemIdsKey) return undefined
     const itemsByRange = JSON.parse(widgetItemIdsKey)
     const itemKeys = Object.entries(itemsByRange).flatMap(([range, itemIds]) => itemIds.map((itemId) => `${range}:${itemId}`))
     let active = true
@@ -1246,7 +1253,7 @@ function App() {
       controller?.abort()
       window.clearInterval(interval)
     }
-  }, [authUser, autoRefresh, page, refreshSeconds, widgetItemIdsKey])
+  }, [authUser, autoRefresh, configOwnerId, page, refreshSeconds, widgetItemIdsKey])
 
   useEffect(() => {
     if (!authUser) return undefined
@@ -1267,6 +1274,7 @@ function App() {
         const loadedConfig = { ...payload, activeDashboardId: active.id }
         lastPersistedSnapshot.current = JSON.stringify(loadedConfig)
         setConfig(loadedConfig)
+        setConfigOwnerId(authUser.id)
         setLayout(active)
         setConfigError('')
         setLayoutLoaded(true)
@@ -1285,11 +1293,14 @@ function App() {
           setLayoutLoaded(true)
         }
       })
+      .finally(() => {
+        if (!controller.signal.aborted) setConfigLoading(false)
+      })
     return () => controller.abort()
-  }, [authUser])
+  }, [authUser, configReload])
 
   useEffect(() => {
-    if (!authUser || authUser.role === 'view' || !layoutLoaded || !config) return undefined
+    if (!authUser || authUser.role === 'view' || !layoutLoaded || !config || configOwnerId !== authUser.id) return undefined
     const revision = ++saveRevision.current
     const persistedConfig = {
       ...config,
@@ -1333,7 +1344,7 @@ function App() {
         })
     }, 250)
     return () => window.clearTimeout(timeout)
-  }, [authUser, layout, config, layoutLoaded])
+  }, [authUser, layout, config, configOwnerId, layoutLoaded])
 
   useEffect(() => {
     if (saveNotice?.type !== 'success') return undefined
@@ -1982,6 +1993,15 @@ function App() {
   }
   if (authUser.role === 'view' && authUser.dashboardIds.length === 0) {
     return <UnauthorizedScreen noAssignedDashboards onLogout={handleLogout} />
+  }
+  if (!config || configOwnerId !== authUser.id) {
+    return (
+      <main className="login-screen">
+        {configLoading || configOwnerId !== authUser.id
+          ? <div className="loading-banner" role="status" aria-live="polite"><span className="loading-spinner" /><div><strong>Carregando configurações</strong><span>Buscando os painéis e preferências salvos...</span></div></div>
+          : <div className="error-banner config-error" role="alert"><Icon name="alert" size={18} /><div><strong>Não foi possível carregar os painéis</strong><span>{configError || 'Tente novamente em alguns instantes.'}</span><button className="config-retry-button" type="button" onClick={() => { setConfigError(''); setConfigLoading(true); setConfigReload((revision) => revision + 1) }}><Icon name="refresh" size={14} />Tentar novamente</button></div></div>}
+      </main>
+    )
   }
 
   return (

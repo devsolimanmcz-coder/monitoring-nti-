@@ -14,13 +14,12 @@ dist-ssr/
 .env
 .env.*
 !.env.example
-# /data/dashboard.json
-# /data/dashboard.*.tmp
-# /data/users.json
-# /data/users.json.*.tmp
+/data/dashboard.json
+/data/dashboard.*.tmp
+/data/users.json
+/data/users.json.*.tmp
 /data/sessions.json
 /data/sessions.json.*.tmp
-!data/dashboard.json
 
 # Editor directories and files
 .vscode/*
