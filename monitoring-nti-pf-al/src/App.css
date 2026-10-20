@@ -61,9 +61,9 @@
 .page-heading h1 { margin: 0; color: #f0f4fb; font: 600 clamp(25px, 3vw, 34px)/1.2 'Space Grotesk', sans-serif; letter-spacing: -1.1px; }
 .page-heading h1 span { color: #91a0b5; font-weight: 400; }
 .page-heading p { margin: 9px 0 0; color: #8290a5; font-size: 11px; }
-.refresh-chip { display: flex; align-items: center; gap: 8px; padding: 9px 11px; color: #8492a8; background: rgba(255,255,255,.025); border: 1px solid var(--border); border-radius: 8px; font-size: 9px; white-space: nowrap; }
+.refresh-chip { display: flex; align-items: center; gap: 8px; padding: 9px 11px; color: #8492a8; background: rgba(255,255,255,.025); border: 1px solid var(--border); border-radius: 8px; font-size: 14px; white-space: nowrap; }
 .refresh-chip svg { color: #73a9f0; }
-.refresh-chip strong { color: #bfd5f2; font-size: 9px; font-weight: 600; }
+.refresh-chip strong { color: #bfd5f2; font-size: 14px; font-weight: 600; }
 
 .error-banner { display: flex; align-items: center; gap: 11px; padding: 12px 14px; margin: 0 0 18px; color: #ffb2b8; background: rgba(123, 36, 51, .16); border: 1px solid rgba(255,111,125,.19); border-radius: 9px; }
 .error-banner > svg { flex: 0 0 auto; color: var(--red); }
@@ -101,11 +101,11 @@
 .network-icon { color: #75adff; background: rgba(89,147,232,.12); border: 1px solid rgba(89,147,232,.16); }
 .server-icon { color: #a990ff; background: rgba(151,119,240,.11); border: 1px solid rgba(151,119,240,.15); }
 .consumption-icon { color: #61d6c4; background: rgba(64,195,174,.1); border: 1px solid rgba(64,195,174,.18); }
-.section-title h2 { margin: 0; color: #e4eaf4; font: 600 14px/1.2 'Space Grotesk',sans-serif; letter-spacing: -.1px; }
-.section-title p { margin: 4px 0 0; color: #75839a; font-size: 9px; }
-.section-counter { padding: 5px 8px; color: #8c9bb0; background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 6px; font-size: 9px; white-space: nowrap; }
+.section-title h2 { margin: 0; color: #e4eaf4; font: 600 20px/1.2 'Space Grotesk',sans-serif; letter-spacing: -.1px; }
+.section-title p { margin: 4px 0 0; color: #75839a; font-size: 16px; }
+.section-counter { padding: 5px 8px; color: #8c9bb0; background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 6px; font-size: 16px; white-space: nowrap; }
 
-.icmp-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); grid-auto-rows: 180px; gap: 11px; container-type: inline-size; }
+.icmp-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); grid-auto-rows: 205px; gap: 11px; container-type: inline-size; }
 .grid-resizable-card { grid-column: span var(--card-width,1); grid-row: span var(--card-height,1); height: 100%; min-height: 0; box-sizing: border-box; }
 .card-editable .card-resize-handle { opacity: .85; }
 .icmp-card { position: relative; min-width: 0; padding: 14px; overflow: hidden; background: linear-gradient(145deg,rgba(19,29,44,.96),rgba(14,22,34,.96)); border: 1px solid var(--border); border-radius: 10px; transition: transform .2s,border-color .2s,box-shadow .2s; }
@@ -114,20 +114,20 @@
 .icmp-card-header,.server-header { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .host-mark,.server-mark { display: grid; flex: 0 0 auto; place-items: center; width: 31px; height: 31px; color: #83b6ff; background: rgba(81,143,227,.12); border: 1px solid rgba(81,143,227,.13); border-radius: 8px; }
 .host-heading,.server-heading { flex: 1; min-width: 0; }
-.host-heading h3,.server-heading h3 { margin: 0; color: #e3eaf5; font: 600 11px/1.35 'Space Grotesk',sans-serif; overflow-wrap: anywhere; white-space: normal; }
-.host-heading > span,.server-heading > span { display: block; margin-top: 3px; color: #718198; font-size: 8px; }
-.status-badge { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; padding: 4px 6px; border: 1px solid transparent; border-radius: 5px; font-size: 7px; font-weight: 700; letter-spacing: .35px; }
+.host-heading h3,.server-heading h3 { margin: 0; color: #e3eaf5; font: 600 20px/1.35 'Space Grotesk',sans-serif; overflow-wrap: anywhere; white-space: normal; }
+.host-heading > span,.server-heading > span { display: block; margin-top: 3px; color: #718198; font-size: 16px; }
+.status-badge { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; padding: 4px 6px; border: 1px solid transparent; border-radius: 5px; font-size: 14px; font-weight: 700; letter-spacing: .35px; }
 .status-badge.online { color: #64dca9; background: rgba(71,215,160,.08); border-color: rgba(71,215,160,.13); }
 .status-badge.warning { color: #f1bd65; background: rgba(242,184,92,.08); border-color: rgba(242,184,92,.15); }
 .status-badge.offline { color: #ff838d; background: rgba(255,111,125,.09); border-color: rgba(255,111,125,.16); }
 .status-badge.unknown { color: #a3afbf; background: rgba(139,164,198,.07); border-color: rgba(139,164,198,.13); }
 .latency-block { display: flex; flex-direction: column; gap: 2px; margin: 21px 0 14px; }
 .latency-value { color: #eaf1fb; font: 600 32px/.98 'Space Grotesk',sans-serif; letter-spacing: -1.2px; font-variant-numeric: tabular-nums; }
-.latency-value small { margin-left: 5px; color: #8090a7; font: 500 10px 'DM Sans',sans-serif; letter-spacing: 0; }
-.latency-label { margin-top: 5px; color: #75849b; font-size: 7px; font-weight: 700; letter-spacing: 1.1px; }
+.latency-value small { margin-left: 5px; color: #8090a7; font: 500 20px 'DM Sans',sans-serif; letter-spacing: 0; }
+.latency-label { margin-top: 5px; color: #75849b; font-size: 12px; font-weight: 700; letter-spacing: 1.1px; }
 .card-divider { height: 1px; background: rgba(139,164,198,.1); }
-.icmp-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 11px; color: #8a98ac; font-size: 9px; }
-.icmp-card-footer strong { color: #dfe8f4; font: 600 14px 'Space Grotesk',sans-serif; font-variant-numeric: tabular-nums; }
+.icmp-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 11px; color: #8a98ac; font-size: 16px; }
+.icmp-card-footer strong { color: #dfe8f4; font: 600 16px 'Space Grotesk',sans-serif; font-variant-numeric: tabular-nums; }
 .icmp-card-footer strong.loss-warning { color: #f3bc66; }
 .icmp-card-footer small { margin-left: 2px; color: #8a98ac; font: 500 9px 'DM Sans',sans-serif; }
 
