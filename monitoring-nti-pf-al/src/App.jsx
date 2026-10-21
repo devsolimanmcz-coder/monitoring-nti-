@@ -9,6 +9,7 @@ import {
   Tooltip,
 } from 'chart.js'
 import { Line } from 'react-chartjs-2'
+import { capacityInDisplayUnit } from './capacity-format.js'
 import { formatMetricSeriesGroups } from './metric-format.js'
 import { getAvailabilityStatus } from './widget-status.js'
 import './App.css'
@@ -157,9 +158,11 @@ function Icon({ name, size = 18, ...props }) {
     arrow: <><path d="M7 17 17 7M7 7h10v10" /></>,
     cpu: <><rect x="5" y="5" width="14" height="14" rx="2" /><path d="M9 9h6v6H9zM9 1v4m6-4v4m-6 14v4m6-4v4M1 9h4m-4 6h4m14-6h4m-4 6h4" /></>,
     memory: <><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M7 10v4m4-4v4m4-4v4M7 3v3m5-3v3m5-3v3m-10 12v3m5-3v3m5-3v3" /></>,
+    battery: <><rect x="3" y="7" width="17" height="10" rx="2" /><path d="M20 10h2v4h-2M7 10v4m4-4v4m4-4v4" /></>,
     disk: <><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5M3 12c0 1.7 4 3 9 3s9-1.3 9-3" /></>,
     check: <path d="m5 12 4 4L19 6" />,
     alert: <><path d="m10.3 3.9-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.1l-8-14a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4m0 4h.01" /></>,
+    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>,
     close: <><path d="m18 6-12 12M6 6l12 12" /></>,
     shield: <><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" /><path d="m9 12 2 2 4-4" /></>,
     edit: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></>,
@@ -191,6 +194,50 @@ function formatNumber(value, digits = 1) {
   return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: digits }).format(Number(value))
 }
 
+function readSeenAlertIds(userId) {
+  if (!userId) return []
+  try {
+    const storedIds = JSON.parse(window.localStorage.getItem(`nti-seen-alerts:${userId}`) || '[]')
+    return Array.isArray(storedIds) ? storedIds.filter((id) => typeof id === 'string') : []
+  } catch (storageError) {
+    console.error('Não foi possível carregar os alertas já visualizados:', storageError)
+    return []
+  }
+}
+
+function formatCapacity(valueInGib) {
+  const capacity = capacityInDisplayUnit(valueInGib)
+  return capacity ? `${formatNumber(capacity.value)} ${capacity.unit}` : 'N/D'
+}
+
+function upsOutputSourceLabel(value) {
+  return ({
+    1: 'Outra fonte',
+    2: 'Sem alimentação',
+    3: 'Rede elétrica',
+    4: 'Bypass',
+    5: 'Bateria',
+    6: 'Modo boost',
+    7: 'Modo redutor',
+    8: 'Inversor',
+    9: 'Autoteste',
+    10: 'Modo ECO',
+  })[value] || (value === null ? 'Sem dados' : `Código ${value}`)
+}
+
+function upsBatteryStatusLabel(value) {
+  return ({
+    1: 'Desconhecido',
+    2: 'Normal',
+    3: 'Bateria baixa',
+    4: 'Descarregada',
+  })[value] || (value === null ? 'Sem dados' : `Código ${value}`)
+}
+
+function triggerPriorityLabel(priority) {
+  return ['Não classificado', 'Informação', 'Aviso', 'Média', 'Alta', 'Desastre'][priority] || 'Alerta'
+}
+
 function MetricCard({ label, value, suffix, detail, icon, tone }) {
   return (
     <article className={`metric-card metric-${tone}`}>
@@ -215,11 +262,13 @@ function alertEventLabel(action) {
   return { opened: 'Alerta aberto', resolved: 'Alerta resolvido', acknowledged: 'Alerta reconhecido' }[action] || action
 }
 
-function IcmpCard({ host, editMode, canDelete, onRemove, onDragStart, onDragOver, onDrop, size, onResize }) {
+function IcmpCard({ host, alerts = [], editMode, canDelete, onRemove, onDragStart, onDragOver, onDrop, size, onResize }) {
+  const alertTooltip = alerts.map((alert) => `${alert.severity === 'critical' ? 'Crítico' : 'Aviso'}: ${alert.description}`).join('\n')
   return (
     <article
       className={`icmp-card grid-resizable-card card-width-${size?.width || 1} ${editMode ? 'card-editable' : ''}`}
       style={{ '--card-width': size?.width || 1, '--card-height': size?.height || 1 }}
+      title={alertTooltip || undefined}
       draggable={editMode}
       onDragStart={(event) => onDragStart(event, 'icmp', host.host_name)}
       onDragOver={onDragOver}
@@ -233,6 +282,7 @@ function IcmpCard({ host, editMode, canDelete, onRemove, onDragStart, onDragOver
           <h3 title={host.host_name}>{host.host_name}</h3>
           <span>Protocolo ICMP</span>
         </div>
+        {alerts.length > 0 && <span className="item-alert-chip" title={alertTooltip} aria-label={`${alerts.length} alertas para ${host.host_name}`}><Icon name="alert" size={13} /><span>{alerts.length}</span></span>}
         <StatusBadge status={host.status_text} />
       </div>
 
@@ -272,11 +322,13 @@ function ResourceBar({ label, value, detail, color }) {
   )
 }
 
-function ServerCard({ server, editMode, canDelete, onRemove, onDragStart, onDragOver, onDrop, size, onResize }) {
+function ServerCard({ server, alerts = [], diskWarningPct = 80, diskCriticalPct = 90, editMode, canDelete, onRemove, onDragStart, onDragOver, onDrop, size, onResize }) {
+  const alertTooltip = alerts.map((alert) => `${alert.severity === 'critical' ? 'Crítico' : 'Aviso'}: ${alert.description}`).join('\n')
   return (
     <article
       className={`server-card grid-resizable-card card-width-${size?.width || 1} ${editMode ? 'card-editable' : ''}`}
       style={{ '--card-width': size?.width || 1, '--card-height': size?.height || 3 }}
+      title={alertTooltip || undefined}
       draggable={editMode}
       onDragStart={(event) => onDragStart(event, 'servers', server.host_name)}
       onDragOver={onDragOver}
@@ -290,7 +342,8 @@ function ServerCard({ server, editMode, canDelete, onRemove, onDragStart, onDrag
           <h3 title={server.host_name}>{server.host_name}</h3>
           <span>Servidor Windows</span>
         </div>
-        <span className="server-live-dot" title="Dados disponíveis" />
+        {alerts.length > 0 && <span className="item-alert-chip" title={alertTooltip} aria-label={`${alerts.length} alertas para ${server.host_name}`}><Icon name="alert" size={13} /><span>{alerts.length}</span></span>}
+        <StatusBadge status={server.status_text} />
       </div>
 
       <div className="server-resources">
@@ -299,7 +352,7 @@ function ServerCard({ server, editMode, canDelete, onRemove, onDragStart, onDrag
           label="MEMÓRIA RAM"
           value={server.ram_pct}
           detail={server.ram_used_gib !== null && server.ram_total_gib !== null
-            ? `${formatNumber(server.ram_used_gib)} / ${formatNumber(server.ram_total_gib)} GiB utilizados`
+            ? `${formatCapacity(server.ram_used_gib)} / ${formatCapacity(server.ram_total_gib)} utilizados`
             : 'Memória indisponível'}
           color="ram-fill"
         />
@@ -310,14 +363,18 @@ function ServerCard({ server, editMode, canDelete, onRemove, onDragStart, onDrag
         {server.disks.length > 0 ? (
           <div className="disk-list">
             {server.disks.map((disk) => (
-              <div className="disk-row" key={`${server.host_name}-${disk.drive}`}>
+              <div
+                className={`disk-row ${disk.used_pct >= diskCriticalPct ? 'disk-row-critical' : disk.used_pct >= diskWarningPct ? 'disk-row-warning' : ''}`}
+                key={`${server.host_name}-${disk.drive}`}
+                title={alerts.find((alert) => alert.type === 'disk_usage' && alert.description.includes(`Disco ${disk.drive}`))?.description}
+              >
                 <div className="disk-row-heading"><strong>{disk.drive}</strong><b>{disk.used_pct === null ? 'N/D' : `${formatNumber(disk.used_pct)}%`}</b></div>
                 <div className="resource-track disk-track" role="meter" aria-label={`Disco ${disk.drive}`} aria-valuemin="0" aria-valuemax="100" aria-valuenow={disk.used_pct === null ? 0 : Math.max(0, Math.min(100, Number(disk.used_pct)))}>
-                  <span className="resource-fill disk-fill" style={{ width: `${disk.used_pct === null ? 0 : Math.max(0, Math.min(100, Number(disk.used_pct)))}%` }} />
+                  <span className={`resource-fill disk-fill ${disk.used_pct >= diskCriticalPct ? 'critical' : disk.used_pct >= diskWarningPct ? 'warning' : ''}`} style={{ width: `${disk.used_pct === null ? 0 : Math.max(0, Math.min(100, Number(disk.used_pct)))}%` }} />
                 </div>
                 <span className="disk-detail">
                   {disk.used_gib !== null && disk.total_gib !== null
-                    ? `${formatNumber(disk.used_gib)} / ${formatNumber(disk.total_gib)} GiB utilizados`
+                    ? `${formatCapacity(disk.used_gib)} / ${formatCapacity(disk.total_gib)} utilizados`
                     : 'Capacidade indisponível'}
                 </span>
               </div>
@@ -325,6 +382,48 @@ function ServerCard({ server, editMode, canDelete, onRemove, onDragStart, onDrag
           </div>
         ) : <p className="empty-inline">Sem dados de volumes</p>}
       </div>
+    </article>
+  )
+}
+
+function UpsCard({ ups }) {
+  const batteryPct = ups.battery_pct === null ? null : Math.max(0, Math.min(100, ups.battery_pct))
+  const loadPct = ups.load_pct === null ? null : Math.max(0, Math.min(100, ups.load_pct))
+  const statusClass = ups.status_text === 'ONLINE' ? 'online' : ups.status_text === 'ALERTA' ? 'warning' : 'offline'
+  const lastMetricLabel = ups.last_metric_at
+    ? `Atualizado às ${new Date(ups.last_metric_at).toLocaleTimeString('pt-BR')}`
+    : 'Aguardando dados do Zabbix'
+
+  return (
+    <article className={`ups-card ups-${statusClass}`}>
+      <header className="ups-card-header">
+        <span className="ups-icon"><Icon name="battery" size={22} /></span>
+        <div className="ups-card-title"><span>MONITORAMENTO DE ENERGIA</span><h2 title={ups.host_name}>{ups.host_name}</h2></div>
+        <span className={`ups-status ${statusClass}`}><i />{ups.status_text}</span>
+      </header>
+      <div className="ups-summary-grid">
+        <div className="ups-summary-item"><span>Modo de alimentação</span><strong>{upsOutputSourceLabel(ups.output_source)}</strong></div>
+        <div className="ups-summary-item"><span>Autonomia estimada</span><strong>{ups.runtime_minutes === null ? '—' : `${formatNumber(ups.runtime_minutes, 0)} min`}</strong></div>
+        <div className="ups-summary-item"><span>Temperatura interna</span><strong>{ups.temperature_c === null ? '—' : `${formatNumber(ups.temperature_c, 1)} °C`}</strong></div>
+        <div className="ups-summary-item"><span>Estado da bateria</span><strong>{upsBatteryStatusLabel(ups.battery_status)}</strong></div>
+      </div>
+      <div className="ups-gauges">
+        <div className="ups-gauge">
+          <div className="ups-gauge-label"><span>Carga da bateria</span><strong>{batteryPct === null ? '—' : `${formatNumber(batteryPct)}%`}</strong></div>
+          <div className="ups-gauge-track" role="meter" aria-label="Carga da bateria" aria-valuemin="0" aria-valuemax="100" aria-valuenow={batteryPct ?? 0}><span className={`ups-gauge-fill battery-fill ${batteryPct !== null && batteryPct < 25 ? 'low' : ''}`} style={{ width: `${batteryPct ?? 0}%` }} /></div>
+        </div>
+        <div className="ups-gauge">
+          <div className="ups-gauge-label"><span>Carga do nobreak</span><strong>{loadPct === null ? '—' : `${formatNumber(loadPct)}%`}</strong></div>
+          <div className="ups-gauge-track" role="meter" aria-label="Carga do nobreak" aria-valuemin="0" aria-valuemax="100" aria-valuenow={loadPct ?? 0}><span className={`ups-gauge-fill load-fill ${loadPct !== null && loadPct >= 80 ? 'high' : ''}`} style={{ width: `${loadPct ?? 0}%` }} /></div>
+        </div>
+      </div>
+      <section className={`ups-trigger-panel ${ups.triggers.length ? 'has-triggers' : ''}`} aria-label="Problemas ativos do nobreak">
+        <div className="ups-trigger-heading"><Icon name={ups.triggers.length ? 'alert' : 'check'} size={15} /><strong>{ups.triggers.length ? `PROBLEMAS ATIVOS · ${ups.triggers.length}` : 'SEM PROBLEMAS ATIVOS'}</strong></div>
+        {ups.triggers.length
+          ? <ul>{ups.triggers.map((trigger) => <li className={`ups-trigger priority-${trigger.priority}`} key={trigger.id}><span>{triggerPriorityLabel(trigger.priority)}</span><strong>{trigger.description}</strong>{trigger.startedAt && <time>{new Date(trigger.startedAt).toLocaleString('pt-BR')}</time>}</li>)}</ul>
+          : <p>Nenhum trigger ativo informado pelo Zabbix.</p>}
+      </section>
+      <footer className="ups-card-footer"><span className={`ups-connection-dot ${ups.status_text === 'ONLINE' ? '' : 'disconnected'}`} />{lastMetricLabel}</footer>
     </article>
   )
 }
@@ -394,7 +493,26 @@ function SectionDialog({ dialog, onClose, onSave }) {
   )
 }
 
+function CameraWidget({ widget }) {
+  const [streamError, setStreamError] = useState(false)
+
+  return (
+    <article className="custom-widget camera-widget">
+      <div className="custom-widget-heading">
+        <div><span>CÂMERA AO VIVO</span><h3 title={widget.title}>{widget.title}</h3></div>
+        <span className="widget-unit">MJPEG</span>
+      </div>
+      <div className="camera-stream">
+        <img src={widget.cameraUrl} alt={`Transmissão ao vivo: ${widget.title}`} onError={() => setStreamError(true)} />
+        {streamError && <span className="camera-stream-error" role="status">Não foi possível carregar a câmera. Verifique o endereço, a conexão e as permissões.</span>}
+      </div>
+    </article>
+  )
+}
+
 function MetricWidget({ widget, data }) {
+  if (widget.type === 'camera') return <CameraWidget key={widget.cameraUrl} widget={widget} />
+
   const itemIds = widget.itemIds || [widget.itemId]
   const range = widget.range || '1h'
   const rawSeries = itemIds.map((itemId) => {
@@ -566,6 +684,7 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
   const [mapSizePx, setMapSizePx] = useState(widget?.mapSizePx || 80)
   const [title, setTitle] = useState(widget?.title || '')
   const [type, setType] = useState(widget?.type || (sectionId ? 'timeseries' : ['network', 'topology'].includes(dashboardType) ? 'availability' : 'timeseries'))
+  const [cameraUrl, setCameraUrl] = useState(widget?.cameraUrl || 'http://10.82.7.226/video.mjpg')
   const [search, setSearch] = useState('')
   const [itemPage, setItemPage] = useState(0)
   const [hasMoreItems, setHasMoreItems] = useState(false)
@@ -660,6 +779,34 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
 
   function submit(event) {
     event.preventDefault()
+    if (type === 'camera') {
+      let url
+      try {
+        url = new URL(cameraUrl.trim())
+      } catch {
+        setError('Informe um endereço HTTP ou HTTPS válido para a câmera.')
+        return
+      }
+      if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) {
+        setError('O endereço deve usar HTTP ou HTTPS e não pode conter credenciais.')
+        return
+      }
+      onSave({
+        id: widget?.id || createId(),
+        title: title.trim() || 'Câmera ao vivo',
+        type: 'camera',
+        cameraUrl: url.href,
+        ...((widget?.sectionId || sectionId) ? { sectionId: widget?.sectionId || sectionId } : {}),
+        mapSizePx,
+        mapCols: widget?.mapCols || 4,
+        mapRows: widget?.mapRows || 4,
+        mapX: widget?.mapX ?? null,
+        mapY: widget?.mapY ?? null,
+        width: widget?.width || 2,
+        height: widget?.height || 3,
+      })
+      return
+    }
     if (!selected) return
     const items = type === 'timeseries' ? selectedItems : [selected]
     if (!items.length || (type === 'timeseries' && selectedItemIds.length !== items.length)) return
@@ -687,13 +834,17 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <form className={`section-dialog widget-dialog ${type === 'timeseries' ? 'timeseries-dialog' : ''}`} role="dialog" aria-modal="true" aria-labelledby="widget-dialog-title" onSubmit={submit}>
-        <div className="dialog-heading"><div><span className="eyebrow">MÉTRICAS NUMÉRICAS DO ZABBIX</span><h2 id="widget-dialog-title">{widget ? 'Configurar indicador' : 'Adicionar indicador'}</h2></div><button className="dialog-close" type="button" aria-label="Fechar" onClick={onClose}><Icon name="close" size={17} /></button></div>
-        <label className="dialog-field widget-host-field"><span>Equipamento</span><select autoFocus value={hostId} onChange={(event) => { setHostId(event.target.value); setItemId(''); setItemPickerValue(''); setSelectedItemIds([]); setSelectedItemDetails([]); setTitle(''); setSearch(''); setItemPage(0); setHasMoreItems(false); setCatalog([]) }} required><option value="">{hostsLoading ? 'Carregando equipamentos...' : 'Selecione um equipamento...'}</option>{hosts.map((host) => <option key={host.hostId} value={host.hostId}>{host.hostName}</option>)}</select></label>
+        <div className="dialog-heading"><div><span className="eyebrow">{type === 'camera' ? 'TRANSMISSÃO AO VIVO' : 'MÉTRICAS NUMÉRICAS DO ZABBIX'}</span><h2 id="widget-dialog-title">{widget ? 'Configurar indicador' : 'Adicionar indicador'}</h2></div><button className="dialog-close" type="button" aria-label="Fechar" onClick={onClose}><Icon name="close" size={17} /></button></div>
+        {!sectionId && <label className="dialog-field widget-type-field"><span>Tipo de visualização</span><select value={type} onChange={(event) => { const nextType = event.target.value; setType(nextType); setError(''); if (nextType !== 'timeseries') { setSelectedItemIds((current) => current.slice(0, 1)); setItemId((current) => current || String(selectedItemIds[0] || '')) } }}>
+          {['network', 'topology'].includes(dashboardType) ? <><option value="availability">Host UP / DOWN</option><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="camera">Câmera ao vivo</option></> : <><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="metric">Valor atual</option><option value="camera">Câmera ao vivo</option></>}
+        </select></label>}
+        {type === 'camera' && <>
+          <label className="dialog-field"><span>Endereço da transmissão</span><input type="url" value={cameraUrl} onChange={(event) => { setCameraUrl(event.target.value); setError('') }} placeholder="http://10.82.7.226/video.mjpg" required /></label>
+          <p className="dialog-hint">A câmera precisa estar acessível neste navegador. Em uma página HTTPS, o navegador pode bloquear transmissões HTTP por conteúdo misto.</p>
+        </>}
+        {type !== 'camera' && <label className="dialog-field widget-host-field"><span>Equipamento</span><select autoFocus value={hostId} onChange={(event) => { setHostId(event.target.value); setItemId(''); setItemPickerValue(''); setSelectedItemIds([]); setSelectedItemDetails([]); setTitle(''); setSearch(''); setItemPage(0); setHasMoreItems(false); setCatalog([]) }} required><option value="">{hostsLoading ? 'Carregando equipamentos...' : 'Selecione um equipamento...'}</option>{hosts.map((host) => <option key={host.hostId} value={host.hostId}>{host.hostName}</option>)}</select></label>}
         {error && <p className="dialog-error" role="alert">{error}</p>}
-        {hostId && <>
-          {!sectionId && <label className="dialog-field widget-type-field"><span>Tipo de visualização</span><select value={type} onChange={(event) => { const nextType = event.target.value; setType(nextType); if (nextType !== 'timeseries') { setSelectedItemIds((current) => current.slice(0, 1)); setItemId((current) => current || String(selectedItemIds[0] || '')) } }}>
-            {['network', 'topology'].includes(dashboardType) ? <><option value="availability">Host UP / DOWN</option><option value="timeseries">Gráfico temporal (até 8 itens)</option></> : <><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="metric">Valor atual</option></>}
-          </select></label>}
+        {type !== 'camera' && hostId && <>
           {type === 'timeseries' && <label className="dialog-field widget-range-field"><span>Período do gráfico</span><select value={range} onChange={(event) => setRange(event.target.value)}><option value="15m">Últimos 15 minutos</option><option value="1h">Última hora</option><option value="3h">Últimas 3 horas</option><option value="6h">Últimas 6 horas</option><option value="24h">Último dia</option><option value="7d">Últimos 7 dias</option><option value="30d">Últimos 30 dias (mensal)</option></select></label>}
           {type === 'availability' && dashboardType === 'topology' && <label className="dialog-field"><span>Tamanho do bloco (px)</span><input type="number" min="56" max="480" step="8" value={mapSizePx} onChange={(event) => setMapSizePx(Math.max(56, Math.min(480, Number(event.target.value) || 56)))} /><span className="dialog-hint">Largura e altura iguais. Padrão: 80 × 80 px.</span></label>}
           <label className="dialog-field widget-search-field"><span>Buscar item deste equipamento</span><input value={search} onChange={(event) => { setSearch(event.target.value); setItemPage(0); setHasMoreItems(false); setCatalog([]) }} placeholder={type === 'availability' ? 'icmpping, ping, status...' : 'CPU, memória, tráfego enviado/recebido...'} /></label>
@@ -729,9 +880,9 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
           {itemError && <p className="dialog-error" role="alert">{itemError}</p>}
           {!itemsLoading && !itemError && !catalog.length && <p className="dialog-hint">Nenhum item numérico disponível para este equipamento.</p>}
         </>}
-        <label className="dialog-field widget-title-field"><span>Título do widget</span><input value={title} maxLength={100} onChange={(event) => setTitle(event.target.value)} placeholder={selected?.itemName || 'Título personalizado'} /></label>
+        <label className="dialog-field widget-title-field"><span>Título do widget</span><input value={title} maxLength={100} onChange={(event) => setTitle(event.target.value)} placeholder={type === 'camera' ? 'Câmera ao vivo' : selected?.itemName || 'Título personalizado'} /></label>
         {type === 'availability' && <p className="dialog-hint">Use um item como <strong>icmpping</strong> que retorna 1 quando responde e 0 quando cai. A recuperação fica amarela por 30s; quedas ficam vermelhas e oscilações frequentes amarelas.</p>}
-        <div className="dialog-actions"><button className="dialog-cancel" type="button" onClick={onClose}>Cancelar</button><button className="dialog-submit" type="submit" disabled={!selected || hostsLoading || itemsLoading || (type === 'timeseries' && !selectedItems.length)}>{widget ? 'Salvar alterações' : 'Adicionar ao painel'}</button></div>
+        <div className="dialog-actions"><button className="dialog-cancel" type="button" onClick={onClose}>Cancelar</button><button className="dialog-submit" type="submit" disabled={type === 'camera' ? !cameraUrl.trim() : !selected || hostsLoading || itemsLoading || (type === 'timeseries' && !selectedItems.length)}>{widget ? 'Salvar alterações' : 'Adicionar ao painel'}</button></div>
       </form>
     </div>
   )
@@ -1010,7 +1161,10 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true)
   const [loginLoading, setLoginLoading] = useState(false)
   const [authError, setAuthError] = useState('')
-  const [dashboard, setDashboard] = useState({ icmp: [], servers: [], alerts: [], updatedAt: null })
+  const [dashboard, setDashboard] = useState({ icmp: [], servers: [], ups: [], alerts: [], updatedAt: null })
+  const [alertToast, setAlertToast] = useState(null)
+  const [alertCenterOpen, setAlertCenterOpen] = useState(false)
+  const [seenAlertIds, setSeenAlertIds] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
@@ -1022,6 +1176,7 @@ function App() {
   const [configLoading, setConfigLoading] = useState(true)
   const [configReload, setConfigReload] = useState(0)
   const [configOwnerId, setConfigOwnerId] = useState(null)
+  const [configConflict, setConfigConflict] = useState(false)
   const [config, setConfig] = useState(null)
   const [page, setPage] = useState('overview')
   const [sidebarHidden, setSidebarHidden] = useState(false)
@@ -1038,10 +1193,12 @@ function App() {
   const [mapClipboard, setMapClipboard] = useState(null)
   const [widgetHistories, setWidgetHistories] = useState({})
   const [saveNotice, setSaveNotice] = useState(null)
+  const dashboardRef = useRef(dashboard)
   const requestInProgress = useRef(false)
   const configSaveQueue = useRef(Promise.resolve())
   const saveRevision = useRef(0)
   const lastPersistedSnapshot = useRef('')
+  const lastPersistedConfig = useRef(null)
   const isAdministrator = authUser?.role === 'administrator'
   const canEditDashboard = authUser?.role === 'administrator' || authUser?.role === 'moderator'
   const activeLayout = useMemo(() => page === 'connectivity'
@@ -1066,12 +1223,18 @@ function App() {
   const refreshSeconds = config?.preferences?.refreshSeconds || 30
   const autoRefresh = config?.preferences?.autoRefresh !== false
   const widgetItemIdsKey = useMemo(
-    () => JSON.stringify(Object.fromEntries([...new Set(layout.widgets.map((widget) => widget.range || '1h'))]
-      .sort()
-      .map((range) => [range, [...new Set(layout.widgets
-        .filter((widget) => (widget.range || '1h') === range)
-        .flatMap((widget) => widget.itemIds || [widget.itemId])
-        .map(Number))].sort((a, b) => a - b)]))),
+    () => {
+      const metricWidgets = layout.widgets.filter((widget) => widget.type !== 'camera')
+      if (!metricWidgets.length) return ''
+      const ranges = [...new Set(metricWidgets.map((widget) => widget.range || '1h'))].sort()
+      return JSON.stringify(Object.fromEntries(ranges.map((range) => [
+        range,
+        [...new Set(metricWidgets
+          .filter((widget) => (widget.range || '1h') === range)
+          .flatMap((widget) => widget.itemIds || [widget.itemId])
+          .map(Number))].sort((a, b) => a - b),
+      ])))
+    },
     [layout.widgets],
   )
   const mapPositions = useMemo(() => resolveMapPositions(layout.widgets.filter((widget) => !widget.sectionId)), [layout.widgets])
@@ -1083,7 +1246,21 @@ function App() {
       const response = await fetch('/api/dashboard', { signal })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar os dados.')
-      setDashboard((current) => ({ ...current, ...payload }))
+      const previousAlertIds = new Set(dashboardRef.current.alerts
+        .filter((alert) => alert.status === 'active')
+        .map((alert) => alert.id))
+      const newlyOpenedAlerts = (payload.alerts || [])
+        .filter((alert) => alert.status === 'active' && !previousAlertIds.has(alert.id))
+      const nextDashboard = { ...dashboardRef.current, ...payload }
+      dashboardRef.current = nextDashboard
+      setDashboard(nextDashboard)
+      if (newlyOpenedAlerts.length) {
+        const highestPriorityAlert = newlyOpenedAlerts.sort((first, second) => (
+          (first.severity === 'critical' ? 0 : 1) - (second.severity === 'critical' ? 0 : 1)
+          || new Date(second.startedAt) - new Date(first.startedAt)
+        ))[0]
+        setAlertToast(highestPriorityAlert)
+      }
       setError('')
       setLastUpdated(new Date(payload.updatedAt || Date.now()))
     } catch (requestError) {
@@ -1097,6 +1274,12 @@ function App() {
       if (!signal?.aborted) setLoading(false)
     }
   }, [authUser])
+
+  useEffect(() => {
+    if (!alertToast || !authUser) return undefined
+    const timeout = window.setTimeout(() => setAlertToast(null), 10_000)
+    return () => window.clearTimeout(timeout)
+  }, [alertToast, authUser])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -1141,6 +1324,15 @@ function App() {
       if (!response.ok) throw new Error(payload.error || 'Não foi possível entrar.')
       setConfigLoading(true)
       setConfigOwnerId(null)
+      lastPersistedConfig.current = null
+      setConfigConflict(false)
+      const emptyDashboard = { icmp: [], servers: [], ups: [], alerts: [], updatedAt: null }
+      dashboardRef.current = emptyDashboard
+      setDashboard(emptyDashboard)
+      setAlertToast(null)
+      setAlertCenterOpen(false)
+      setSeenAlertIds([])
+      setLastUpdated(null)
       setAuthUser(payload.user)
       const nextRoute = payload.user.role === 'view'
         ? payload.user.dashboardIds[0] ? `#/dashboard/${payload.user.dashboardIds[0]}` : '#/unauthorized'
@@ -1162,9 +1354,18 @@ function App() {
       setAuthUser(null)
       setConfig(null)
       setConfigOwnerId(null)
+      lastPersistedConfig.current = null
+      setConfigConflict(false)
       setConfigLoading(true)
       setLayoutLoaded(false)
-      window.location.hash = '#/unauthorized'
+      const emptyDashboard = { icmp: [], servers: [], ups: [], alerts: [], updatedAt: null }
+      dashboardRef.current = emptyDashboard
+      setDashboard(emptyDashboard)
+      setAlertToast(null)
+      setAlertCenterOpen(false)
+      setSeenAlertIds([])
+      setLastUpdated(null)
+      window.location.hash = '#/login'
     }
   }, [])
   const goToLogin = useCallback(() => { window.location.hash = '#/login' }, [])
@@ -1273,6 +1474,7 @@ function App() {
         if (!active) throw new Error('Nenhum dashboard válido foi encontrado na configuração.')
         const loadedConfig = { ...payload, activeDashboardId: active.id }
         lastPersistedSnapshot.current = JSON.stringify(loadedConfig)
+        lastPersistedConfig.current = loadedConfig
         setConfig(loadedConfig)
         setConfigOwnerId(authUser.id)
         setLayout(active)
@@ -1319,14 +1521,54 @@ function App() {
       configSaveQueue.current = configSaveQueue.current
         .catch(() => {})
         .then(async () => {
+          const baseConfig = lastPersistedConfig.current
           const response = await fetch('/api/dashboard-config', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(persistedConfig),
+            body: JSON.stringify({ ...persistedConfig, baseConfig }),
           })
           const payload = await response.json().catch(() => ({}))
-          if (!response.ok) throw new Error(payload.error || 'Não foi possível salvar o dashboard.')
-          lastPersistedSnapshot.current = snapshot
+          if (!response.ok) {
+            const requestError = new Error(payload.error || 'Não foi possível salvar o dashboard.')
+            requestError.status = response.status
+            throw requestError
+          }
+          lastPersistedConfig.current = payload
+          lastPersistedSnapshot.current = JSON.stringify(payload)
+          if (revision === saveRevision.current) {
+            setConfig(payload)
+            setLayout(payload.dashboards.find((item) => item.id === layout.id) || layout)
+          } else {
+            setConfig((current) => {
+              if (!current) return payload
+              const sentDashboards = new Map(persistedConfig.dashboards.map((item) => [item.id, item]))
+              const localDashboards = new Map(current.dashboards.map((item) => [item.id, item]))
+              const savedDashboards = new Map(payload.dashboards.map((item) => [item.id, item]))
+              const dashboardIds = [...current.dashboards, ...payload.dashboards]
+                .map((item) => item.id)
+                .filter((id, index, ids) => ids.indexOf(id) === index)
+              const dashboards = dashboardIds.flatMap((id) => {
+                const local = localDashboards.get(id)
+                const sent = sentDashboards.get(id)
+                const saved = savedDashboards.get(id)
+                if (JSON.stringify(local) === JSON.stringify(sent)) return saved ? [saved] : []
+                return local ? [local] : []
+              })
+              const merged = { ...current, dashboards }
+              for (const key of Object.keys(payload)) {
+                if (key === 'dashboards') continue
+                if (JSON.stringify(current[key]) === JSON.stringify(persistedConfig[key])) {
+                  merged[key] = payload[key]
+                }
+              }
+              return merged
+            })
+            setLayout((current) => {
+              const sent = persistedConfig.dashboards.find((item) => item.id === current.id)
+              const saved = payload.dashboards.find((item) => item.id === current.id)
+              return saved && JSON.stringify(current) === JSON.stringify(sent) ? saved : current
+            })
+          }
           if (revision === saveRevision.current) {
             setConfigError('')
             setSaveNotice({ type: 'success', message: 'Configurações salvas com sucesso.' })
@@ -1339,6 +1581,7 @@ function App() {
             : requestError.message || 'Não foi possível salvar o painel.'
           if (revision === saveRevision.current) {
             setConfigError(message)
+            setConfigConflict(requestError.status === 409 || requestError.status === 428)
             setSaveNotice({ type: 'error', message: 'Não foi possível salvar as configurações.' })
           }
         })
@@ -1488,11 +1731,11 @@ function App() {
   const availableForSection = (section) => {
     const isIcmp = section.kind === 'icmp'
     const items = isIcmp ? dashboard.icmp : dashboard.servers
-    const hidden = isIcmp ? activeLayout.hiddenIcmp : activeLayout.hiddenServers
     if (page === 'connectivity' || page === 'servers') {
       const assignedHosts = new Set(Object.keys(activeLayout.assignments))
-      return items.filter((item) => !hidden.includes(item.host_name) && !assignedHosts.has(item.host_name))
+      return items.filter((item) => !assignedHosts.has(item.host_name))
     }
+    const hidden = isIcmp ? activeLayout.hiddenIcmp : activeLayout.hiddenServers
     const defaultSection = isIcmp ? 'network' : 'servers'
     const alreadyInSection = new Set(items
       .filter((item) => !hidden.includes(item.host_name)
@@ -1935,8 +2178,48 @@ function App() {
     }))
   }
 
-  const onlineCount = dashboard.icmp.filter((host) => host.status_text === 'ONLINE').length
+  const onlineCount = dashboard.icmp.filter((host) => (
+    host.status_text === 'ONLINE' && !(Number(host.icmp_loss) > 0)
+  )).length
+    + dashboard.servers.filter((server) => server.status_text === 'ONLINE').length
   const activeAlerts = dashboard.alerts.filter((item) => item.status !== 'resolved')
+  const seenAlertIdSet = new Set([...seenAlertIds, ...readSeenAlertIds(authUser?.id)])
+  const unreadAlertCount = activeAlerts.filter((alert) => !seenAlertIdSet.has(alert.id)).length
+  const sortedActiveAlerts = [...activeAlerts].sort((first, second) => (
+    (first.severity === 'critical' ? 0 : 1) - (second.severity === 'critical' ? 0 : 1)
+    || new Date(second.startedAt) - new Date(first.startedAt)
+  ))
+  const alertsByHost = new Map()
+  for (const alert of activeAlerts) {
+    const hostAlerts = alertsByHost.get(alert.hostName) || []
+    hostAlerts.push(alert)
+    alertsByHost.set(alert.hostName, hostAlerts)
+  }
+
+  function toggleAlertCenter() {
+    const open = !alertCenterOpen
+    if (open) {
+      const storageKey = `nti-seen-alerts:${authUser.id}`
+      let storedIds = seenAlertIds
+      try {
+        const savedIds = JSON.parse(window.localStorage.getItem(storageKey) || '[]')
+        if (Array.isArray(savedIds)) storedIds = savedIds.filter((id) => typeof id === 'string')
+      } catch (storageError) {
+        console.error('Não foi possível ler o estado dos alertas visualizados:', storageError)
+      }
+      const nextSeenIds = [...new Set([
+        ...storedIds,
+        ...activeAlerts.map((alert) => alert.id),
+      ])]
+      setSeenAlertIds(nextSeenIds)
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(nextSeenIds))
+      } catch (storageError) {
+        console.error('Não foi possível salvar o estado dos alertas visualizados:', storageError)
+      }
+    }
+    setAlertCenterOpen(open)
+  }
   const filteredAlerts = dashboard.alerts.filter((alert) => {
     if (alertFilter !== 'all' && alert.status !== alertFilter) return false
     if (severityFilter !== 'all' && alert.severity !== severityFilter) return false
@@ -1950,8 +2233,12 @@ function App() {
   const criticalAlerts = activeAlerts.filter((item) => item.severity === 'critical').length
   const warningAlerts = activeAlerts.filter((item) => item.severity === 'warning').length
   const unknownHosts = dashboard.icmp.filter((host) => host.status_text === 'SEM DADOS' || host.status_text === 'PING SEM DADOS').length
+    + dashboard.servers.filter((server) => server.status_text !== 'ONLINE').length
   const offlineHosts = dashboard.icmp.filter((host) => host.status_text === 'OFFLINE').length
-  const degradedLinks = dashboard.icmp.filter((host) => host.status_text === 'ALERTA' || Number(host.icmp_loss) > 0).length
+  const degradedLinks = dashboard.icmp.filter((host) => (
+    ['ONLINE', 'ALERTA'].includes(host.status_text)
+    && (host.status_text === 'ALERTA' || Number(host.icmp_loss) > 0)
+  )).length
   const highCpuServers = dashboard.servers.filter((server) => Number(server.cpu_pct) >= (config?.alertRules.cpuPct || 90)).length
   const highMemoryServers = dashboard.servers.filter((server) => Number(server.ram_pct) >= (config?.alertRules.memoryPct || 90)).length
   const fullDisks = dashboard.servers.flatMap((server) => server.disks.map((disk) => ({ ...disk, host_name: server.host_name })))
@@ -1966,6 +2253,7 @@ function App() {
         : 'Painel personalizado com métricas reais do Zabbix.'],
     connectivity: ['Conectividade', 'Disponibilidade, latência e perda de pacotes dos links monitorados.'],
     servers: ['Servidores', 'Recursos de CPU, memória e armazenamento disponíveis no Zabbix.'],
+    ups: ['Nobreaks', 'Energia, autonomia, bateria e falhas reportadas pelos triggers do Zabbix.'],
     alerts: ['Central de alertas', 'Incidentes ativos, reconhecidos e resolvidos com histórico.'],
     settings: ['Configurações', 'Atualização, apresentação e limites de detecção de anomalias.'],
     users: ['Usuários', 'Contas, grupos e acesso individual aos painéis.'],
@@ -2021,6 +2309,7 @@ function App() {
           {authUser.role !== 'view' && <>
             <a className={`nav-link ${page === 'connectivity' ? 'active' : ''}`} href="#/connectivity"><Icon name="network" /><span>Conectividade</span><span className="nav-count">{dashboard.icmp.length || '—'}</span></a>
             <a className={`nav-link ${page === 'servers' ? 'active' : ''}`} href="#/servers"><Icon name="server" /><span>Servidores</span><span className="nav-count">{dashboard.servers.length || '—'}</span></a>
+            <a className={`nav-link ${page === 'ups' ? 'active' : ''}`} href="#/ups"><Icon name="battery" /><span>Nobreaks</span><span className="nav-count">{dashboard.ups.length || '—'}</span></a>
             <a className={`nav-link ${page === 'alerts' ? 'active' : ''}`} href="#/alerts"><Icon name="alert" /><span>Alertas</span><span className="nav-count">{dashboard.alerts.filter((item) => item.status !== 'resolved').length || '0'}</span></a>
           </>}
         </nav>
@@ -2034,8 +2323,8 @@ function App() {
 
         <div className="sidebar-bottom">
           <div className="sidebar-status">
-            <span className={`connection-dot ${error ? 'disconnected' : dashboard.icmp.length || dashboard.servers.length ? '' : 'waiting'}`} />
-            <div><strong>{error ? 'API indisponível' : dashboard.icmp.length || dashboard.servers.length ? 'Monitoramento ativo' : 'Aguardando conexão'}</strong><span>Origem: Zabbix SQL</span></div>
+            <span className={`connection-dot ${error ? 'disconnected' : dashboard.icmp.length || dashboard.servers.length || dashboard.ups.length ? '' : 'waiting'}`} />
+            <div><strong>{error ? 'API indisponível' : dashboard.icmp.length || dashboard.servers.length || dashboard.ups.length ? 'Monitoramento ativo' : 'Aguardando conexão'}</strong><span>Origem: Zabbix SQL</span></div>
           </div>
           <div className="sidebar-version"><Icon name="shield" size={14} /> Acesso seguro · NTI</div>
         </div>
@@ -2055,9 +2344,62 @@ function App() {
             </label>
             <div className={`update-info ${dataIsStale ? 'is-stale' : ''}`}><span className={`pulse-dot ${error ? 'is-error' : ''}`} /><span>{dataIsStale ? 'Dados desatualizados' : 'Atualizado'} <strong>{updatedLabel}</strong></span></div>
             <button className="icon-button" type="button" aria-label="Atualizar agora" onClick={() => loadDashboard()}><Icon name="refresh" size={17} /></button>
+            <div className="global-alerts">
+              <button
+                className={`icon-button alert-center-button ${unreadAlertCount ? 'has-alerts' : ''}`}
+                type="button"
+                aria-label={`${unreadAlertCount} alertas não visualizados`}
+                aria-expanded={alertCenterOpen}
+                aria-controls="global-alert-popover"
+                title="Alertas ativos"
+                onClick={toggleAlertCenter}
+              >
+                <Icon name="bell" size={17} />
+                {unreadAlertCount > 0 && <span className="alert-center-count">{unreadAlertCount > 99 ? '99+' : unreadAlertCount}</span>}
+              </button>
+              {alertCenterOpen && (
+                <section className="global-alert-popover" id="global-alert-popover" aria-label="Alertas ativos">
+                  <header><div><strong>Alertas ativos</strong><span>{activeAlerts.length} em acompanhamento</span></div><button type="button" aria-label="Fechar alertas" onClick={() => setAlertCenterOpen(false)}><Icon name="close" size={15} /></button></header>
+                  <div className="global-alert-list">
+                    {sortedActiveAlerts.length ? sortedActiveAlerts.slice(0, 8).map((alert) => (
+                      <button
+                        className={`global-alert-item ${alert.severity}`}
+                        key={alert.id}
+                        type="button"
+                        title={`${alert.hostName}: ${alert.description}`}
+                        onClick={() => {
+                          setAlertCenterOpen(false)
+                          window.location.hash = authUser.role === 'view'
+                            ? `#/dashboard/${authUser.dashboardIds[0]}`
+                            : '#/alerts'
+                        }}
+                      >
+                        <span className={`severity-dot ${alert.severity}`} />
+                        <span><strong>{alert.hostName}</strong><small>{alert.description}</small></span>
+                        <time>{new Date(alert.startedAt).toLocaleTimeString('pt-BR')}</time>
+                      </button>
+                    )) : <p className="global-alert-empty">Nenhum alerta ativo no momento.</p>}
+                  </div>
+                  {authUser.role !== 'view' && <a className="global-alert-footer" href="#/alerts" onClick={() => setAlertCenterOpen(false)}>Abrir central de alertas <span>→</span></a>}
+                </section>
+              )}
+            </div>
             {kioskMode && <button className="icon-button" type="button" onClick={() => setKioskPaused((value) => !value)} aria-label={kioskPaused ? 'Retomar rotação' : 'Pausar rotação'}>{kioskPaused ? '▶' : 'Ⅱ'}</button>}
             <span className="user-role-label">{ROLE_LABELS[authUser.role]?.split(' · ')[0]}</span>
-            <button className="user-avatar" type="button" aria-label={`Sair da conta ${authUser.username}`} title={`Sair · ${authUser.username}`} onClick={handleLogout}>{authUser.username.slice(0, 2).toUpperCase()}</button>
+            <button
+              className="user-avatar"
+              type="button"
+              aria-label={`Sair da conta ${authUser.username}`}
+              title={`Sair · ${authUser.username}`}
+              onClick={() => setConfirmation({
+                title: 'Deseja realmente sair?',
+                message: `Você está conectado como ${authUser.username}. Confirma o encerramento da sessão?`,
+                confirmLabel: 'Sair',
+                onConfirm: handleLogout,
+              })}
+            >
+              {authUser.username.slice(0, 2).toUpperCase()}
+            </button>
           </div>
         </header>
 
@@ -2103,7 +2445,15 @@ function App() {
           {configError && (
             <div className="error-banner config-error" role="alert">
               <Icon name="alert" size={18} />
-              <div><strong>Configuração do painel</strong><span>{configError}</span></div>
+              <div><strong>Configuração do painel</strong><span>{configError}</span>{configConflict && <button className="config-retry-button" type="button" onClick={() => {
+                setConfig(null)
+                setConfigOwnerId(null)
+                setLayoutLoaded(false)
+                setConfigConflict(false)
+                setConfigLoading(true)
+                setConfigError('')
+                setConfigReload((revision) => revision + 1)
+              }}><Icon name="refresh" size={14} />Recarregar versão salva</button>}</div>
               <button type="button" onClick={() => setConfigError('')} aria-label="Fechar aviso"><Icon name="close" size={16} /></button>
             </div>
           )}
@@ -2122,9 +2472,27 @@ function App() {
             </div>
           )}
 
+          {page === 'ups' && <>
+            <section className="metrics-grid ups-overview-metrics" aria-label="Resumo dos nobreaks">
+              <MetricCard label="NOBREAKS MONITORADOS" value={dashboard.ups.length} suffix="" detail="Equipamentos ativos no Zabbix" icon="battery" tone="violet" />
+              <MetricCard label="ONLINE" value={dashboard.ups.filter((item) => item.status_text === 'ONLINE').length} suffix="" detail="Respondendo e sem triggers ativos" icon="check" tone="green" />
+              <MetricCard label="PROBLEMAS ATIVOS" value={dashboard.ups.reduce((total, item) => total + item.triggers.length, 0)} suffix="" detail="Triggers abertos no Zabbix" icon="alert" tone={dashboard.ups.some((item) => item.triggers.length) ? 'amber' : 'green'} />
+              <MetricCard label="BATERIA BAIXA" value={dashboard.ups.filter((item) => item.battery_pct !== null && item.battery_pct < 25).length} suffix="" detail="Carga abaixo de 25%" icon="battery" tone={dashboard.ups.some((item) => item.battery_pct !== null && item.battery_pct < 25) ? 'amber' : 'green'} />
+            </section>
+            <section className="content-section" aria-label="Cards de monitoramento dos nobreaks">
+              <div className="section-title-row">
+                <div className="section-title"><span className="section-icon server-icon"><Icon name="battery" size={18} /></span><div><h2>Proteção de energia</h2><p>Carga, autonomia, temperatura e problemas reportados por cada nobreak</p></div></div>
+                <span className="section-counter">{dashboard.ups.length} equipamentos</span>
+              </div>
+              {dashboard.ups.length
+                ? <div className="ups-grid">{dashboard.ups.map((ups) => <UpsCard key={ups.host_name} ups={ups} />)}</div>
+                : <EmptyState title="Nenhum nobreak encontrado" detail="A API procura hosts ativos com nome NOBREAK- e itens UPS configurados no Zabbix." />}
+            </section>
+          </>}
+
           {page === 'overview' && <>
             <section className="metrics-grid executive-metrics" aria-label="Resumo do monitoramento">
-              <a href="#/connectivity"><MetricCard label="EQUIPAMENTOS MONITORADOS" value={dashboard.icmp.length + dashboard.servers.length} suffix="" detail={`${onlineCount} disponíveis · ${offlineHosts} indisponíveis · ${unknownHosts} sem dados`} icon="network" tone="blue" /></a>
+              <a href="#/connectivity"><MetricCard label="EQUIPAMENTOS MONITORADOS" value={dashboard.icmp.length + dashboard.servers.length} suffix="" detail={`${onlineCount} disponíveis · ${degradedLinks} degradados · ${offlineHosts} indisponíveis · ${unknownHosts} sem dados`} icon="network" tone="blue" /></a>
               <a href="#/connectivity"><MetricCard label="LINKS DEGRADADOS" value={degradedLinks} suffix={` / ${dashboard.icmp.length}`} detail={`${offlineHosts} indisponíveis · ${onlineCount} disponíveis`} icon="activity" tone="amber" /></a>
               <a href="#/servers"><MetricCard label="DISCOS ≥ 80%" value={fullDisks.length} suffix="" detail={`${fullDisks.filter((disk) => Number(disk.used_pct) >= (config?.alertRules.diskCriticalPct || 90)).length} críticos`} icon="disk" tone={fullDisks.length ? 'amber' : 'green'} /></a>
               <a href="#/servers"><MetricCard label="CPU / MEMÓRIA ELEVADA" value={highCpuServers + highMemoryServers} suffix="" detail={`${highCpuServers} CPU · ${highMemoryServers} memória`} icon="cpu" tone={highCpuServers + highMemoryServers ? 'amber' : 'green'} /></a>
@@ -2386,8 +2754,8 @@ function App() {
                   >
                     {sectionCards.map((item) => (
                       isIcmp
-                        ? <IcmpCard key={item.host_name} host={item} size={activeLayout.cardSizes[`icmp:${item.host_name}`]} onResize={resizeHostCardByDrag} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
-                        : <ServerCard key={item.host_name} server={item} size={activeLayout.cardSizes[`servers:${item.host_name}`]} onResize={resizeHostCardByDrag} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
+                        ? <IcmpCard key={item.host_name} host={item} alerts={alertsByHost.get(item.host_name)} size={activeLayout.cardSizes[`icmp:${item.host_name}`]} onResize={resizeHostCardByDrag} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
+                        : <ServerCard key={item.host_name} server={item} alerts={alertsByHost.get(item.host_name)} diskWarningPct={config?.alertRules.diskWarningPct ?? 80} diskCriticalPct={config?.alertRules.diskCriticalPct ?? 90} size={activeLayout.cardSizes[`servers:${item.host_name}`]} onResize={resizeHostCardByDrag} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
                     ))}
                   </div>
                 ) : (
@@ -2400,6 +2768,24 @@ function App() {
           <footer className="page-footer"><span>NTIBIX <i>·</i> MONITORAMENTO E OBSERVABILIDADE</span><span>Dados fornecidos pelo Zabbix <span className="footer-live" /></span></footer>
         </div>
       </main>
+      {alertToast && authUser && (
+        <aside className={`alert-toast ${alertToast.severity}`} role="alert" aria-live="assertive">
+          <button
+            className="alert-toast-content"
+            type="button"
+            onClick={() => {
+              setAlertToast(null)
+              window.location.hash = authUser.role === 'view'
+                ? `#/dashboard/${authUser.dashboardIds[0]}`
+                : '#/alerts'
+            }}
+          >
+            <Icon name="alert" size={18} />
+            <span><strong>{alertToast.severity === 'critical' ? 'Alerta crítico' : 'Novo alerta'} · {alertToast.hostName}</strong><small>{alertToast.description}</small></span>
+          </button>
+          <button className="alert-toast-close" type="button" aria-label="Dispensar alerta" onClick={() => setAlertToast(null)}><Icon name="close" size={15} /></button>
+        </aside>
+      )}
       {saveNotice && (
         <div className={`save-toast ${saveNotice.type}`} role={saveNotice.type === 'error' ? 'alert' : 'status'} aria-live="polite">
           {saveNotice.type === 'saving'
@@ -2412,7 +2798,7 @@ function App() {
       {sectionDialog && <SectionDialog dialog={sectionDialog} onClose={() => setSectionDialog(null)} onSave={handleSaveSection} />}
       {dashboardCreateOpen && <DashboardCreateDialog onClose={() => setDashboardCreateOpen(false)} onCreate={createDashboard} />}
       {widgetDialog && <WidgetDialog onClose={() => setWidgetDialog(null)} onSave={saveWidget} widget={widgetDialog.id ? widgetDialog : null} sectionId={widgetDialog.sectionId} dashboardType={layout.type || 'general'} />}
-      {confirmation && <ConfirmDialog title={confirmation.title} message={confirmation.message} onCancel={() => setConfirmation(null)} onConfirm={() => {
+      {confirmation && <ConfirmDialog title={confirmation.title} message={confirmation.message} confirmLabel={confirmation.confirmLabel} onCancel={() => setConfirmation(null)} onConfirm={() => {
         const action = confirmation.onConfirm
         setConfirmation(null)
         action()

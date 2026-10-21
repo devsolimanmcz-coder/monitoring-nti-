@@ -20,6 +20,11 @@ export function createTestDatabase() {
       target.config = values[0]
       return [{ affectedRows: 1 }]
     }
+    if (sql.startsWith('update app_dashboard_config')) {
+      dashboardUpserts += 1
+      target.config = values[0]
+      return [{ affectedRows: 1 }]
+    }
     if (sql.startsWith('select user_id, username, password_salt')) {
       return [cloneState(target.users)]
     }

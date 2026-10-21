@@ -111,15 +111,25 @@ export const ICMP_QUERY = `
 `
 
 const SELECTED_HOSTS = `
-  SELECT hostid, host AS host_name
-  FROM hosts
-  WHERE host IN (
-    'SAL0017',
-    'SAL0013',
-    'SAL0027-PE-R7525-SNMP',
-    'SAL0026-PE-R7525-SNMP',
-    'SAL0016'
-  )
+  SELECT h.hostid, h.host AS host_name
+  FROM hosts h
+  WHERE h.status = 0
+    AND h.flags = 0
+    AND h.host LIKE 'SAL%'
+    AND EXISTS (
+      SELECT 1
+      FROM items cpu
+      WHERE cpu.hostid = h.hostid
+        AND cpu.key_ = 'system.cpu.util'
+        AND cpu.status = 0
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM items memory
+      WHERE memory.hostid = h.hostid
+        AND memory.key_ IN ('vm.memory.util', 'vm.memory.size[used]')
+        AND memory.status = 0
+    )
 `
 
 const SELECTED_ITEMS = `
@@ -139,7 +149,9 @@ const SELECTED_ITEMS = `
         'vm.memory.size[used]',
         'vm.memory.size[total]'
       )
-      OR i.key_ REGEXP '^vfs[.]fs[.]size\\[[A-Z]:,(used|total|pused)\\]$'
+      OR i.key_ LIKE 'vfs.fs.size[%,used]'
+      OR i.key_ LIKE 'vfs.fs.size[%,total]'
+      OR i.key_ LIKE 'vfs.fs.size[%,pused]'
     )
 `
 
@@ -163,7 +175,23 @@ const ITEM_VALUES = `
         ORDER BY hist_uint.clock DESC, hist_uint.ns DESC
         LIMIT 1
       )
-    END AS item_value
+    END AS item_value,
+    CASE i.value_type
+      WHEN 0 THEN (
+        SELECT hist.clock
+        FROM history hist
+        WHERE hist.itemid = i.itemid
+        ORDER BY hist.clock DESC, hist.ns DESC
+        LIMIT 1
+      )
+      WHEN 3 THEN (
+        SELECT hist_uint.clock
+        FROM history_uint hist_uint
+        WHERE hist_uint.itemid = i.itemid
+        ORDER BY hist_uint.clock DESC, hist_uint.ns DESC
+        LIMIT 1
+      )
+    END AS item_clock
   FROM selected_items i
   WHERE i.value_type IN (0, 3)
 `
@@ -178,7 +206,13 @@ export const SERVER_METRICS_QUERY = `
     ROUND(MAX(CASE WHEN v.key_ = 'system.cpu.util' THEN v.item_value END), 1) AS cpu_pct,
     ROUND(MAX(CASE WHEN v.key_ = 'vm.memory.util' THEN v.item_value END), 1) AS ram_pct,
     ROUND(MAX(CASE WHEN v.key_ = 'vm.memory.size[used]' THEN v.item_value END) / 1073741824, 1) AS ram_used_gib,
-    ROUND(MAX(CASE WHEN v.key_ = 'vm.memory.size[total]' THEN v.item_value END) / 1073741824, 1) AS ram_total_gib
+    ROUND(MAX(CASE WHEN v.key_ = 'vm.memory.size[total]' THEN v.item_value END) / 1073741824, 1) AS ram_total_gib,
+    MAX(CASE WHEN v.key_ IN ('system.cpu.util', 'vm.memory.util') THEN v.item_clock END) AS last_metric_clock,
+    CASE
+      WHEN MAX(CASE WHEN v.key_ IN ('system.cpu.util', 'vm.memory.util') THEN v.item_clock END) IS NULL
+        OR UNIX_TIMESTAMP() - MAX(CASE WHEN v.key_ IN ('system.cpu.util', 'vm.memory.util') THEN v.item_clock END) > 180 THEN 'SEM DADOS'
+      ELSE 'ONLINE'
+    END AS status_text
   FROM selected_hosts h
   LEFT JOIN item_values v ON v.hostid = h.hostid
   GROUP BY h.hostid, h.host_name
@@ -199,7 +233,12 @@ export const SERVER_DISKS_QUERY = `
         MAX(CASE WHEN key_ LIKE '%,total]' THEN item_value END) AS total_bytes,
         MAX(CASE WHEN key_ LIKE '%,pused]' THEN item_value END) AS used_pct
       FROM item_values
-      WHERE key_ REGEXP '^vfs[.]fs[.]size\\[[A-Z]:,(used|total|pused)\\]$'
+      WHERE (
+        key_ LIKE 'vfs.fs.size[%,used]'
+        OR key_ LIKE 'vfs.fs.size[%,total]'
+        OR key_ LIKE 'vfs.fs.size[%,pused]'
+      )
+        AND SUBSTRING_INDEX(SUBSTRING_INDEX(key_, '[', -1), ',', 1) <> '{#FSNAME}'
       GROUP BY
         hostid,
         host_name,
@@ -213,6 +252,116 @@ export const SERVER_DISKS_QUERY = `
     ROUND(total_bytes / 1073741824, 1) AS total_gib
   FROM disk_values
   ORDER BY host_name, drive
+`
+
+const UPS_HOSTS = `
+  SELECT h.hostid, h.host AS host_name
+  FROM hosts h
+  WHERE h.status = 0
+    AND h.flags = 0
+    AND h.host LIKE 'NOBREAK-%'
+    AND EXISTS (
+      SELECT 1
+      FROM items battery
+      WHERE battery.hostid = h.hostid
+        AND battery.key_ = 'upsBatteryCharge'
+        AND battery.status = 0
+    )
+`
+
+const UPS_ITEM_VALUES = `
+  SELECT
+    i.hostid,
+    i.host_name,
+    i.key_,
+    CASE i.value_type
+      WHEN 0 THEN (
+        SELECT hist.value
+        FROM history hist
+        WHERE hist.itemid = i.itemid
+        ORDER BY hist.clock DESC, hist.ns DESC
+        LIMIT 1
+      )
+      WHEN 3 THEN (
+        SELECT hist_uint.value
+        FROM history_uint hist_uint
+        WHERE hist_uint.itemid = i.itemid
+        ORDER BY hist_uint.clock DESC, hist_uint.ns DESC
+        LIMIT 1
+      )
+    END AS item_value,
+    CASE i.value_type
+      WHEN 0 THEN (
+        SELECT hist.clock
+        FROM history hist
+        WHERE hist.itemid = i.itemid
+        ORDER BY hist.clock DESC, hist.ns DESC
+        LIMIT 1
+      )
+      WHEN 3 THEN (
+        SELECT hist_uint.clock
+        FROM history_uint hist_uint
+        WHERE hist_uint.itemid = i.itemid
+        ORDER BY hist_uint.clock DESC, hist_uint.ns DESC
+        LIMIT 1
+      )
+    END AS item_clock
+  FROM selected_items i
+  WHERE i.value_type IN (0, 3)
+`
+
+export const UPS_METRICS_QUERY = `
+  WITH
+    selected_hosts AS (${UPS_HOSTS}),
+    selected_items AS (
+      SELECT h.hostid, h.host_name, i.itemid, i.key_, i.value_type
+      FROM selected_hosts h
+      INNER JOIN items i ON i.hostid = h.hostid
+      WHERE i.status = 0
+        AND i.key_ IN (
+          'upsBatteryCharge',
+          'upsLoad',
+          'upsOutputSource',
+          'upsRuntimeRemaining',
+          'upsTemperature',
+          'upsBatteryStatus',
+          'icmpping'
+        )
+    ),
+    item_values AS (${UPS_ITEM_VALUES})
+  SELECT
+    h.host_name,
+    MAX(CASE WHEN v.key_ = 'upsBatteryCharge' THEN v.item_value END) AS battery_pct,
+    MAX(CASE WHEN v.key_ = 'upsLoad' THEN v.item_value END) AS load_pct,
+    MAX(CASE WHEN v.key_ = 'upsOutputSource' THEN v.item_value END) AS output_source,
+    MAX(CASE WHEN v.key_ = 'upsRuntimeRemaining' THEN v.item_value END) AS runtime_minutes,
+    MAX(CASE WHEN v.key_ = 'upsTemperature' THEN v.item_value END) AS temperature_c,
+    MAX(CASE WHEN v.key_ = 'upsBatteryStatus' THEN v.item_value END) AS battery_status,
+    MAX(CASE WHEN v.key_ = 'icmpping' THEN v.item_value END) AS ping_value,
+    MAX(CASE WHEN v.key_ = 'icmpping' THEN v.item_clock END) AS ping_clock,
+    MAX(v.item_clock) AS last_metric_clock
+  FROM selected_hosts h
+  LEFT JOIN item_values v ON v.hostid = h.hostid
+  GROUP BY h.hostid, h.host_name
+  ORDER BY h.host_name
+`
+
+export const UPS_TRIGGERS_QUERY = `
+  WITH selected_hosts AS (${UPS_HOSTS})
+  SELECT DISTINCT
+    h.host_name,
+    t.triggerid,
+    t.description,
+    t.priority,
+    t.lastchange
+  FROM selected_hosts h
+  INNER JOIN items i ON i.hostid = h.hostid
+  INNER JOIN functions f ON f.itemid = i.itemid
+  INNER JOIN triggers t ON t.triggerid = f.triggerid
+  WHERE i.status = 0
+    AND t.status = 0
+    AND t.value = 1
+  ORDER BY h.host_name, t.priority DESC, t.description
 `
 
 export const CATALOG_QUERY = `

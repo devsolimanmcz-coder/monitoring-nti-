@@ -19,9 +19,12 @@ import {
   ITEM_TYPE_QUERY,
   SERVER_DISKS_QUERY,
   SERVER_METRICS_QUERY,
+  UPS_METRICS_QUERY,
+  UPS_TRIGGERS_QUERY,
 } from './queries.js'
 import { evaluateAlerts } from './alert-engine.js'
 import {
+  mergeDashboardConfig,
   readDashboardConfig,
   updateDashboardConfig,
 } from './dashboard-config.js'
@@ -271,18 +274,20 @@ app.get('/api/dashboard-config', requireAuth, async (request, response) => {
 
 app.put('/api/dashboard-config', requireAuth, requireRole('administrator', 'moderator'), async (request, response) => {
   try {
+    const { baseConfig, ...incomingConfig } = request.body || {}
+    if (!baseConfig) {
+      const error = new Error('Esta tela está com uma versão antiga da configuração. Recarregue o painel antes de salvar.')
+      error.statusCode = 428
+      throw error
+    }
     response.json(await updateDashboardConfig((persisted) => {
-      if (request.authUser.role === 'moderator') assertModeratorConfigUpdate(persisted, request.body)
-      return {
-        ...request.body,
-        alerts: persisted.alerts,
-        alertEvents: persisted.alertEvents,
-        conditions: persisted.conditions,
-      }
+      const merged = mergeDashboardConfig(persisted, incomingConfig, baseConfig)
+      if (request.authUser.role === 'moderator') assertModeratorConfigUpdate(persisted, merged)
+      return merged
     }))
   } catch (error) {
     console.error('Salvamento da configuração do dashboard falhou:', error.message)
-    response.status(error.code ? 500 : 400).json({
+    response.status(error.statusCode || (error.code ? 500 : 400)).json({
       error: error.code
         ? 'Não foi possível salvar a configuração do painel no banco da aplicação.'
         : error.message || 'Não foi possível salvar a configuração do painel.',
@@ -487,11 +492,27 @@ app.post('/api/alerts/:alertId/acknowledge', requireAuth, requireRole('administr
 app.get('/api/dashboard', requireAuth, async (request, response) => {
   try {
     const database = getPool()
-    const [icmpRows, serverRows, diskRows] = await Promise.all([
+    const [icmpRows, serverRows, diskRows, upsRows, upsTriggerRows] = await Promise.all([
       database.query(ICMP_QUERY).then(([rows]) => rows),
       database.query(SERVER_METRICS_QUERY).then(([rows]) => rows),
       database.query(SERVER_DISKS_QUERY).then(([rows]) => rows),
+      database.query(UPS_METRICS_QUERY).then(([rows]) => rows),
+      database.query(UPS_TRIGGERS_QUERY).then(([rows]) => rows),
     ])
+
+    const upsTriggersByHost = new Map()
+    for (const row of upsTriggerRows) {
+      const triggers = upsTriggersByHost.get(row.host_name) || []
+      triggers.push({
+        id: String(row.triggerid),
+        description: row.description,
+        priority: Number(row.priority),
+        startedAt: row.lastchange
+          ? new Date(Number(row.lastchange) * 1000).toISOString()
+          : null,
+      })
+      upsTriggersByHost.set(row.host_name, triggers)
+    }
 
     const disksByHost = new Map()
     for (const row of diskRows) {
@@ -516,12 +537,42 @@ app.get('/api/dashboard', requireAuth, async (request, response) => {
       })),
       servers: serverRows.map((row) => ({
         host_name: row.host_name,
+        status_text: row.status_text,
+        last_metric_at: row.last_metric_clock
+          ? new Date(Number(row.last_metric_clock) * 1000).toISOString()
+          : null,
         cpu_pct: toNullableNumber(row.cpu_pct),
         ram_pct: toNullableNumber(row.ram_pct),
         ram_used_gib: toNullableNumber(row.ram_used_gib),
         ram_total_gib: toNullableNumber(row.ram_total_gib),
         disks: disksByHost.get(row.host_name) || [],
       })),
+      ups: upsRows.map((row) => {
+        const pingClock = row.ping_clock ? Number(row.ping_clock) : null
+        const pingValue = toNullableNumber(row.ping_value)
+        const triggers = upsTriggersByHost.get(row.host_name) || []
+        const stalePing = pingValue === null || !pingClock || Math.floor(Date.now() / 1000) - pingClock > 180
+        return {
+          host_name: row.host_name,
+          status_text: stalePing
+            ? 'SEM DADOS'
+            : pingValue === 0
+              ? 'OFFLINE'
+              : triggers.length
+                ? 'ALERTA'
+                : 'ONLINE',
+          battery_pct: toNullableNumber(row.battery_pct),
+          load_pct: toNullableNumber(row.load_pct),
+          output_source: toNullableNumber(row.output_source),
+          runtime_minutes: toNullableNumber(row.runtime_minutes),
+          temperature_c: toNullableNumber(row.temperature_c),
+          battery_status: toNullableNumber(row.battery_status),
+          last_metric_at: row.last_metric_clock
+            ? new Date(Number(row.last_metric_clock) * 1000).toISOString()
+            : null,
+          triggers,
+        }
+      }),
     }
     let savedConfig
     try {
@@ -544,10 +595,22 @@ app.get('/api/dashboard', requireAuth, async (request, response) => {
         return
       }
       const permittedKinds = new Set(config.dashboards.flatMap((item) => item.sections.map((section) => section.kind)))
+      const permittedHosts = new Set(config.dashboards.flatMap((item) => item.widgets.flatMap((widget) => [
+        widget.hostName,
+        ...(widget.items || []).map((metric) => metric.hostName),
+      ]).filter(Boolean)))
       responseDashboard.icmp = permittedKinds.has('icmp') ? responseDashboard.icmp : []
       responseDashboard.servers = permittedKinds.has('servers') ? responseDashboard.servers : []
-      responseDashboard.alerts = []
-      responseDashboard.alertEvents = []
+      responseDashboard.ups = []
+      const visibleAlerts = responseDashboard.alerts.filter((alert) => (
+        ['host_unavailable', 'collection_stale', 'high_latency', 'packet_loss'].includes(alert.type)
+          ? permittedKinds.has('icmp') || permittedHosts.has(alert.hostName)
+          : ['high_cpu', 'high_memory', 'disk_usage'].includes(alert.type)
+            && (permittedKinds.has('servers') || permittedHosts.has(alert.hostName))
+      ))
+      const visibleAlertIds = new Set(visibleAlerts.map((alert) => alert.id))
+      responseDashboard.alerts = visibleAlerts
+      responseDashboard.alertEvents = responseDashboard.alertEvents.filter((event) => visibleAlertIds.has(event.alertId))
     }
     response.json(responseDashboard)
   } catch (error) {

@@ -78,8 +78,11 @@ Abra o endereço local informado pelo Vite (normalmente
 
 Verifique as conexões SQL do Zabbix e da aplicação em
 `http://localhost:3001/api/health`.
-`/api/dashboard` retorna os dados ICMP e dos servidores. O painel atualiza
+`/api/dashboard` retorna dados ICMP, dos servidores e dos nobreaks. O painel atualiza
 automaticamente a cada 30 segundos.
+Hosts ativos `NOBREAK-*` com o item `upsBatteryCharge` também aparecem em
+**Nobreaks**, com bateria, carga, autonomia, temperatura, alimentação e
+descrições dos triggers ativos do Zabbix.
 
 ## Rede e implantação
 
@@ -110,6 +113,10 @@ no painel. Taxas de bits, taxas de bytes, quantidades de bytes e durações
 são exibidas em unidades legíveis, sem alterar os valores armazenados no Zabbix.
 Os históricos dos indicadores são consultados em lotes para reduzir chamadas à
 API e ao banco de dados.
+Também é possível adicionar um widget **Câmera ao vivo** usando uma URL HTTP ou
+HTTPS de imagem/MJPEG; o endereço e o título são salvos junto com o painel. O
+navegador pode bloquear transmissões HTTP quando o próprio painel é servido por
+HTTPS.
 
 Ao criar um painel, escolha **Geral** ou **Rede**. O tipo **Rede** começa vazio
 e permite adicionar indicadores de disponibilidade (item com `1 = UP` e
