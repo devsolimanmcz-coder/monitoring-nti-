@@ -10,6 +10,7 @@ import {
 } from 'chart.js'
 import { Line } from 'react-chartjs-2'
 import { capacityInDisplayUnit } from './capacity-format.js'
+import { normalizeApiError, parseApiResponse } from './api-response.js'
 import { formatMetricSeriesGroups } from './metric-format.js'
 import { getAvailabilityStatus } from './widget-status.js'
 import './App.css'
@@ -481,6 +482,7 @@ function SectionDialog({ dialog, onClose, onSave }) {
               <option value="icmp">Rede e aplicações (ICMP)</option>
               <option value="servers">Servidores (CPU, RAM e discos)</option>
               <option value="consumption">Consumo de dados e tráfego</option>
+              <option value="ups">Nobreaks (energia e autonomia)</option>
             </select>
           </label>
         )}
@@ -510,8 +512,14 @@ function CameraWidget({ widget }) {
   )
 }
 
-function MetricWidget({ widget, data }) {
+function MetricWidget({ widget, data, upsDevices = [] }) {
   if (widget.type === 'camera') return <CameraWidget key={widget.cameraUrl} widget={widget} />
+  if (widget.type === 'ups') {
+    const ups = upsDevices.find((item) => item.host_name === widget.hostName)
+    return ups
+      ? <UpsCard ups={ups} />
+      : <article className="custom-widget ups-widget-empty"><div className="custom-widget-heading"><div><span>MONITORAMENTO DE ENERGIA</span><h3>{widget.hostName}</h3></div><span className="widget-unit">NOBREAK</span></div><p>Este nobreak ainda não está disponível ou não foi autorizado para este painel.</p></article>
+  }
 
   const itemIds = widget.itemIds || [widget.itemId]
   const range = widget.range || '1h'
@@ -672,7 +680,8 @@ function MetricWidget({ widget, data }) {
   )
 }
 
-function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
+function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId, upsDevices = [] }) {
+  const initialType = widget?.type || (sectionId ? 'timeseries' : ['network', 'topology'].includes(dashboardType) ? 'availability' : 'timeseries')
   const [hosts, setHosts] = useState([])
   const [catalog, setCatalog] = useState([])
   const [selectedItemDetails, setSelectedItemDetails] = useState(widget?.items || [])
@@ -683,12 +692,13 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
   const [range, setRange] = useState(widget?.range || '1h')
   const [mapSizePx, setMapSizePx] = useState(widget?.mapSizePx || 80)
   const [title, setTitle] = useState(widget?.title || '')
-  const [type, setType] = useState(widget?.type || (sectionId ? 'timeseries' : ['network', 'topology'].includes(dashboardType) ? 'availability' : 'timeseries'))
+  const [type, setType] = useState(initialType)
   const [cameraUrl, setCameraUrl] = useState(widget?.cameraUrl || 'http://10.82.7.226/video.mjpg')
+  const [upsHostName, setUpsHostName] = useState(widget?.hostName || '')
   const [search, setSearch] = useState('')
   const [itemPage, setItemPage] = useState(0)
   const [hasMoreItems, setHasMoreItems] = useState(false)
-  const [hostsLoading, setHostsLoading] = useState(true)
+  const [hostsLoading, setHostsLoading] = useState(!['camera', 'ups'].includes(initialType))
   const [itemsLoading, setItemsLoading] = useState(false)
   const [error, setError] = useState('')
   const [itemError, setItemError] = useState('')
@@ -720,10 +730,11 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
   }
 
   useEffect(() => {
+    if (['camera', 'ups'].includes(type)) return undefined
     const controller = new AbortController()
     fetch('/api/catalog/hosts', { signal: controller.signal })
       .then(async (response) => {
-        const payload = await response.json()
+        const payload = await parseApiResponse(response)
         if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar os equipamentos.')
         setHosts(payload)
         if (widget?.hostName) {
@@ -735,16 +746,14 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
       .catch((requestError) => {
         if (requestError.name !== 'AbortError') {
           console.error('Falha ao carregar os equipamentos do catálogo:', requestError)
-          setError(requestError.message === 'Failed to fetch'
-            ? 'Não foi possível conectar à lista de equipamentos do Zabbix.'
-            : requestError.message)
+          setError(normalizeApiError(requestError, 'Não foi possível conectar à lista de equipamentos do Zabbix.'))
         }
       })
       .finally(() => {
         if (!controller.signal.aborted) setHostsLoading(false)
       })
     return () => controller.abort()
-  }, [widget?.hostId, widget?.hostName])
+  }, [type, widget?.hostId, widget?.hostName])
 
   useEffect(() => {
     if (!hostId) return undefined
@@ -755,7 +764,7 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
       try {
         const params = new URLSearchParams({ hostId, search, page: String(itemPage) })
         const response = await fetch(`/api/catalog?${params}`, { signal: controller.signal })
-        const payload = await response.json()
+        const payload = await parseApiResponse(response)
         if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar os itens do equipamento.')
         setCatalog((current) => itemPage === 0 ? payload : [...current, ...payload])
         setSelectedItemDetails((current) => [...new Map([...current, ...payload].map((item) => [Number(item.itemId), item])).values()])
@@ -763,9 +772,7 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
       } catch (requestError) {
         if (requestError.name !== 'AbortError') {
           console.error('Falha ao carregar os itens do equipamento:', requestError)
-          setItemError(requestError.message === 'Failed to fetch'
-            ? 'Não foi possível conectar ao catálogo de itens do Zabbix.'
-            : requestError.message)
+          setItemError(normalizeApiError(requestError, 'Não foi possível conectar ao catálogo de itens do Zabbix.'))
         }
       } finally {
         if (!controller.signal.aborted) setItemsLoading(false)
@@ -779,6 +786,28 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
 
   function submit(event) {
     event.preventDefault()
+    if (type === 'ups') {
+      const selectedUps = upsDevices.find((item) => item.host_name === upsHostName)
+      if (!selectedUps) {
+        setError('Selecione um nobreak disponível no Zabbix.')
+        return
+      }
+      onSave({
+        id: widget?.id || createId(),
+        title: title.trim() || selectedUps.host_name,
+        type: 'ups',
+        hostName: selectedUps.host_name,
+        ...((widget?.sectionId || sectionId) ? { sectionId: widget?.sectionId || sectionId } : {}),
+        mapSizePx,
+        mapCols: widget?.mapCols || 4,
+        mapRows: widget?.mapRows || (dashboardType === 'topology' ? 6 : 4),
+        mapX: widget?.mapX ?? null,
+        mapY: widget?.mapY ?? null,
+        width: widget?.width || 2,
+        height: widget?.height || 3,
+      })
+      return
+    }
     if (type === 'camera') {
       let url
       try {
@@ -834,17 +863,18 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <form className={`section-dialog widget-dialog ${type === 'timeseries' ? 'timeseries-dialog' : ''}`} role="dialog" aria-modal="true" aria-labelledby="widget-dialog-title" onSubmit={submit}>
-        <div className="dialog-heading"><div><span className="eyebrow">{type === 'camera' ? 'TRANSMISSÃO AO VIVO' : 'MÉTRICAS NUMÉRICAS DO ZABBIX'}</span><h2 id="widget-dialog-title">{widget ? 'Configurar indicador' : 'Adicionar indicador'}</h2></div><button className="dialog-close" type="button" aria-label="Fechar" onClick={onClose}><Icon name="close" size={17} /></button></div>
+        <div className="dialog-heading"><div><span className="eyebrow">{type === 'camera' ? 'TRANSMISSÃO AO VIVO' : type === 'ups' ? 'MONITORAMENTO DE ENERGIA' : 'MÉTRICAS NUMÉRICAS DO ZABBIX'}</span><h2 id="widget-dialog-title">{widget ? 'Configurar indicador' : 'Adicionar indicador'}</h2></div><button className="dialog-close" type="button" aria-label="Fechar" onClick={onClose}><Icon name="close" size={17} /></button></div>
         {!sectionId && <label className="dialog-field widget-type-field"><span>Tipo de visualização</span><select value={type} onChange={(event) => { const nextType = event.target.value; setType(nextType); setError(''); if (nextType !== 'timeseries') { setSelectedItemIds((current) => current.slice(0, 1)); setItemId((current) => current || String(selectedItemIds[0] || '')) } }}>
-          {['network', 'topology'].includes(dashboardType) ? <><option value="availability">Host UP / DOWN</option><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="camera">Câmera ao vivo</option></> : <><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="metric">Valor atual</option><option value="camera">Câmera ao vivo</option></>}
+          {['network', 'topology'].includes(dashboardType) ? <><option value="availability">Host UP / DOWN</option><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="camera">Câmera ao vivo</option><option value="ups">Monitoramento de nobreak</option></> : <><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="metric">Valor atual</option><option value="camera">Câmera ao vivo</option><option value="ups">Monitoramento de nobreak</option></>}
         </select></label>}
+        {type === 'ups' && <label className="dialog-field"><span>Nobreak</span><select autoFocus value={upsHostName} onChange={(event) => { setUpsHostName(event.target.value); setTitle(event.target.value); setError('') }} required><option value="">{upsDevices.length ? 'Selecione um nobreak...' : 'Nenhum nobreak disponível no Zabbix'}</option>{upsDevices.map((item) => <option key={item.host_name} value={item.host_name}>{item.host_name}</option>)}</select><span className="dialog-hint">Os dados de bateria, carga, autonomia e alertas serão atualizados junto com o painel.</span></label>}
         {type === 'camera' && <>
           <label className="dialog-field"><span>Endereço da transmissão</span><input type="url" value={cameraUrl} onChange={(event) => { setCameraUrl(event.target.value); setError('') }} placeholder="http://10.82.7.226/video.mjpg" required /></label>
           <p className="dialog-hint">A câmera precisa estar acessível neste navegador. Em uma página HTTPS, o navegador pode bloquear transmissões HTTP por conteúdo misto.</p>
         </>}
-        {type !== 'camera' && <label className="dialog-field widget-host-field"><span>Equipamento</span><select autoFocus value={hostId} onChange={(event) => { setHostId(event.target.value); setItemId(''); setItemPickerValue(''); setSelectedItemIds([]); setSelectedItemDetails([]); setTitle(''); setSearch(''); setItemPage(0); setHasMoreItems(false); setCatalog([]) }} required><option value="">{hostsLoading ? 'Carregando equipamentos...' : 'Selecione um equipamento...'}</option>{hosts.map((host) => <option key={host.hostId} value={host.hostId}>{host.hostName}</option>)}</select></label>}
+        {!['camera', 'ups'].includes(type) && <label className="dialog-field widget-host-field"><span>Equipamento</span><select autoFocus value={hostId} onChange={(event) => { setHostId(event.target.value); setItemId(''); setItemPickerValue(''); setSelectedItemIds([]); setSelectedItemDetails([]); setTitle(''); setSearch(''); setItemPage(0); setHasMoreItems(false); setCatalog([]) }} required><option value="">{hostsLoading ? 'Carregando equipamentos...' : 'Selecione um equipamento...'}</option>{hosts.map((host) => <option key={host.hostId} value={host.hostId}>{host.hostName}</option>)}</select></label>}
         {error && <p className="dialog-error" role="alert">{error}</p>}
-        {type !== 'camera' && hostId && <>
+        {!['camera', 'ups'].includes(type) && hostId && <>
           {type === 'timeseries' && <label className="dialog-field widget-range-field"><span>Período do gráfico</span><select value={range} onChange={(event) => setRange(event.target.value)}><option value="15m">Últimos 15 minutos</option><option value="1h">Última hora</option><option value="3h">Últimas 3 horas</option><option value="6h">Últimas 6 horas</option><option value="24h">Último dia</option><option value="7d">Últimos 7 dias</option><option value="30d">Últimos 30 dias (mensal)</option></select></label>}
           {type === 'availability' && dashboardType === 'topology' && <label className="dialog-field"><span>Tamanho do bloco (px)</span><input type="number" min="56" max="480" step="8" value={mapSizePx} onChange={(event) => setMapSizePx(Math.max(56, Math.min(480, Number(event.target.value) || 56)))} /><span className="dialog-hint">Largura e altura iguais. Padrão: 80 × 80 px.</span></label>}
           <label className="dialog-field widget-search-field"><span>Buscar item deste equipamento</span><input value={search} onChange={(event) => { setSearch(event.target.value); setItemPage(0); setHasMoreItems(false); setCatalog([]) }} placeholder={type === 'availability' ? 'icmpping, ping, status...' : 'CPU, memória, tráfego enviado/recebido...'} /></label>
@@ -880,9 +910,9 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId }) {
           {itemError && <p className="dialog-error" role="alert">{itemError}</p>}
           {!itemsLoading && !itemError && !catalog.length && <p className="dialog-hint">Nenhum item numérico disponível para este equipamento.</p>}
         </>}
-        <label className="dialog-field widget-title-field"><span>Título do widget</span><input value={title} maxLength={100} onChange={(event) => setTitle(event.target.value)} placeholder={type === 'camera' ? 'Câmera ao vivo' : selected?.itemName || 'Título personalizado'} /></label>
+        <label className="dialog-field widget-title-field"><span>Título do widget</span><input value={title} maxLength={100} onChange={(event) => setTitle(event.target.value)} placeholder={type === 'camera' ? 'Câmera ao vivo' : type === 'ups' ? upsHostName || 'Monitoramento de nobreak' : selected?.itemName || 'Título personalizado'} /></label>
         {type === 'availability' && <p className="dialog-hint">Use um item como <strong>icmpping</strong> que retorna 1 quando responde e 0 quando cai. A recuperação fica amarela por 30s; quedas ficam vermelhas e oscilações frequentes amarelas.</p>}
-        <div className="dialog-actions"><button className="dialog-cancel" type="button" onClick={onClose}>Cancelar</button><button className="dialog-submit" type="submit" disabled={type === 'camera' ? !cameraUrl.trim() : !selected || hostsLoading || itemsLoading || (type === 'timeseries' && !selectedItems.length)}>{widget ? 'Salvar alterações' : 'Adicionar ao painel'}</button></div>
+        <div className="dialog-actions"><button className="dialog-cancel" type="button" onClick={onClose}>Cancelar</button><button className="dialog-submit" type="submit" disabled={type === 'camera' ? !cameraUrl.trim() : type === 'ups' ? !upsDevices.some((item) => item.host_name === upsHostName) : !selected || hostsLoading || itemsLoading || (type === 'timeseries' && !selectedItems.length)}>{widget ? 'Salvar alterações' : 'Adicionar ao painel'}</button></div>
       </form>
     </div>
   )
@@ -983,7 +1013,7 @@ function UserAdministration({ dashboards, currentUser }) {
 
   const fetchUsers = useCallback(async (signal) => {
     const response = await fetch('/api/users', { signal })
-    const payload = await response.json()
+    const payload = await parseApiResponse(response)
     if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar os usuários.')
     return payload
   }, [])
@@ -999,7 +1029,7 @@ function UserAdministration({ dashboards, currentUser }) {
       }])))
       setError('')
     } catch (requestError) {
-      setError(requestError.message || 'Não foi possível carregar os usuários.')
+      setError(normalizeApiError(requestError, 'Não foi possível carregar os usuários.'))
     } finally { setLoading(false) }
   }, [fetchUsers])
 
@@ -1016,7 +1046,7 @@ function UserAdministration({ dashboards, currentUser }) {
         }])))
       })
       .catch((requestError) => {
-        if (requestError.name !== 'AbortError') setError(requestError.message)
+        if (requestError.name !== 'AbortError') setError(normalizeApiError(requestError, 'Não foi possível carregar os usuários.'))
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false)
@@ -1039,7 +1069,7 @@ function UserAdministration({ dashboards, currentUser }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, role, dashboardIds: role === 'view' ? dashboardIds : [] }),
       })
-      const payload = await response.json()
+      const payload = await parseApiResponse(response)
       if (!response.ok) throw new Error(payload.error || 'Não foi possível criar o usuário.')
       setUsername('')
       setPassword('')
@@ -1047,7 +1077,7 @@ function UserAdministration({ dashboards, currentUser }) {
       setNotice(`Usuário ${payload.username} criado.`)
       await loadUsers()
     } catch (requestError) {
-      setError(requestError.message || 'Não foi possível criar o usuário.')
+      setError(normalizeApiError(requestError, 'Não foi possível criar o usuário.'))
     } finally {
       setSaving(false)
     }
@@ -1068,12 +1098,12 @@ function UserAdministration({ dashboards, currentUser }) {
           password: draft.password,
         }),
       })
-      const payload = await response.json()
+      const payload = await parseApiResponse(response)
       if (!response.ok) throw new Error(payload.error || 'Não foi possível salvar o usuário.')
       setNotice(`Permissões de ${payload.username} atualizadas.`)
       await loadUsers()
     } catch (requestError) {
-      setError(requestError.message || 'Não foi possível salvar o usuário.')
+      setError(normalizeApiError(requestError, 'Não foi possível salvar o usuário.'))
     } finally {
       setSaving(false)
     }
@@ -1084,12 +1114,12 @@ function UserAdministration({ dashboards, currentUser }) {
     setError('')
     try {
       const response = await fetch(`/api/users/${encodeURIComponent(user.id)}`, { method: 'DELETE' })
-      const payload = await response.json().catch(() => ({}))
+      const payload = await parseApiResponse(response)
       if (!response.ok) throw new Error(payload.error || 'Não foi possível excluir o usuário.')
       setNotice(`Usuário ${user.username} excluído.`)
       await loadUsers()
     } catch (requestError) {
-      setError(requestError.message || 'Não foi possível excluir o usuário.')
+      setError(normalizeApiError(requestError, 'Não foi possível excluir o usuário.'))
     } finally {
       setSaving(false)
     }
@@ -1104,12 +1134,12 @@ function UserAdministration({ dashboards, currentUser }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ disabled }),
       })
-      const payload = await response.json()
+      const payload = await parseApiResponse(response)
       if (!response.ok) throw new Error(payload.error || 'Não foi possível alterar o estado do usuário.')
       setNotice(`Conta ${payload.disabled ? 'desativada' : 'ativada'}: ${payload.username}.`)
       await loadUsers()
     } catch (requestError) {
-      setError(requestError.message || 'Não foi possível alterar o usuário.')
+      setError(normalizeApiError(requestError, 'Não foi possível alterar o usuário.'))
     } finally {
       setSaving(false)
     }
@@ -1118,7 +1148,7 @@ function UserAdministration({ dashboards, currentUser }) {
   return (
     <section className="content-section user-admin">
       <div className="user-admin-intro"><div><h2>Contas e grupos de acesso</h2><p>Controle quem pode administrar, organizar ou apenas visualizar cada painel.</p></div><span className="user-admin-badge">{users.length} usuários</span></div>
-      {error && <div className="error-banner" role="alert"><Icon name="alert" size={17} /><span>{error}</span></div>}
+      {error && <div className="error-banner" role="alert"><Icon name="alert" size={18} /><div><strong>Não foi possível atualizar as contas</strong><span>{error}</span></div></div>}
       {notice && <p className="user-admin-notice" role="status">{notice}</p>}
       <form className="user-create-form" onSubmit={createUser}>
         <h3>Criar usuário</h3>
@@ -1224,7 +1254,7 @@ function App() {
   const autoRefresh = config?.preferences?.autoRefresh !== false
   const widgetItemIdsKey = useMemo(
     () => {
-      const metricWidgets = layout.widgets.filter((widget) => widget.type !== 'camera')
+      const metricWidgets = layout.widgets.filter((widget) => !['camera', 'ups'].includes(widget.type))
       if (!metricWidgets.length) return ''
       const ranges = [...new Set(metricWidgets.map((widget) => widget.range || '1h'))].sort()
       return JSON.stringify(Object.fromEntries(ranges.map((range) => [
@@ -1244,7 +1274,7 @@ function App() {
     if (!authUser) return
     try {
       const response = await fetch('/api/dashboard', { signal })
-      const payload = await response.json()
+      const payload = await parseApiResponse(response)
       if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar os dados.')
       const previousAlertIds = new Set(dashboardRef.current.alerts
         .filter((alert) => alert.status === 'active')
@@ -1266,9 +1296,7 @@ function App() {
     } catch (requestError) {
       if (requestError.name !== 'AbortError') {
         console.error('Falha ao carregar os dados de monitoramento:', requestError)
-        setError(requestError.message === 'Failed to fetch'
-          ? 'Falha ao conectar à API de monitoramento. Verifique a conexão e tente novamente.'
-          : requestError.message || 'Falha ao conectar à API de monitoramento.')
+        setError(normalizeApiError(requestError, 'Falha ao conectar à API de monitoramento. Verifique a conexão e tente novamente.'))
       }
     } finally {
       if (!signal?.aborted) setLoading(false)
@@ -1285,7 +1313,7 @@ function App() {
     const controller = new AbortController()
     fetch('/api/auth/me', { signal: controller.signal })
       .then(async (response) => {
-        const payload = await response.json().catch(() => ({}))
+        const payload = await parseApiResponse(response)
         if (!response.ok) {
           const error = new Error(payload.error || 'Sua sessão não está autenticada.')
           error.status = response.status
@@ -1320,7 +1348,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       })
-      const payload = await response.json()
+      const payload = await parseApiResponse(response)
       if (!response.ok) throw new Error(payload.error || 'Não foi possível entrar.')
       setConfigLoading(true)
       setConfigOwnerId(null)
@@ -1339,7 +1367,7 @@ function App() {
         : '#/overview'
       window.location.hash = nextRoute
     } catch (requestError) {
-      setAuthError(requestError.message || 'Não foi possível entrar.')
+      setAuthError(normalizeApiError(requestError, 'Não foi possível entrar.'))
     } finally {
       setLoginLoading(false)
     }
@@ -1409,7 +1437,7 @@ function App() {
             const batch = itemIds.slice(offset, offset + 100)
             const params = new URLSearchParams({ itemIds: batch.join(','), range })
             const response = await fetch(`/api/history?${params}`, { signal: controller.signal })
-            const payload = await response.json()
+            const payload = await parseApiResponse(response)
             if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar o histórico dos indicadores.')
             for (const itemId of batch) {
               if (payload[itemId]) loaded[`${range}:${itemId}`] = payload[itemId]
@@ -1430,9 +1458,7 @@ function App() {
       } catch (requestError) {
         if (active && requestError.name !== 'AbortError') {
           console.error('Falha ao carregar os históricos dos indicadores:', requestError)
-          const message = requestError.message === 'Failed to fetch'
-            ? 'Não foi possível conectar ao serviço de histórico.'
-            : requestError.message
+          const message = normalizeApiError(requestError, 'Não foi possível conectar ao serviço de histórico.')
           setWidgetHistories((current) => Object.fromEntries(itemKeys.map((key) => [
             key,
             { history: current[key]?.history || null, error: message },
@@ -1461,7 +1487,7 @@ function App() {
     const controller = new AbortController()
     fetch('/api/dashboard-config', { signal: controller.signal })
       .then(async (response) => {
-        const payload = await response.json()
+        const payload = await parseApiResponse(response)
         if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar as configurações.')
         const dashboards = Array.isArray(payload.dashboards) ? payload.dashboards : []
         const routeDashboardId = window.location.hash.startsWith('#/dashboard/')
@@ -1489,9 +1515,7 @@ function App() {
       .catch((requestError) => {
         if (requestError.name !== 'AbortError') {
           console.error('Falha ao carregar as configurações do painel:', requestError)
-          setConfigError(requestError.message === 'Failed to fetch'
-            ? 'Não foi possível conectar ao serviço de configurações.'
-            : requestError.message)
+          setConfigError(normalizeApiError(requestError, 'Não foi possível conectar ao serviço de configurações.'))
           setLayoutLoaded(true)
         }
       })
@@ -1527,7 +1551,7 @@ function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...persistedConfig, baseConfig }),
           })
-          const payload = await response.json().catch(() => ({}))
+          const payload = await parseApiResponse(response)
           if (!response.ok) {
             const requestError = new Error(payload.error || 'Não foi possível salvar o dashboard.')
             requestError.status = response.status
@@ -1576,9 +1600,7 @@ function App() {
         })
         .catch((requestError) => {
           console.error('Falha ao salvar as configurações do painel:', requestError)
-          const message = requestError.message === 'Failed to fetch'
-            ? 'Não foi possível conectar ao serviço para salvar as alterações.'
-            : requestError.message || 'Não foi possível salvar o painel.'
+          const message = normalizeApiError(requestError, 'Não foi possível conectar ao serviço para salvar as alterações.')
           if (revision === saveRevision.current) {
             setConfigError(message)
             setConfigConflict(requestError.status === 409 || requestError.status === 428)
@@ -2148,7 +2170,7 @@ function App() {
   const acknowledgeAlert = async (alert) => {
     try {
       const response = await fetch(`/api/alerts/${encodeURIComponent(alert.id)}/acknowledge`, { method: 'POST' })
-      const payload = await response.json()
+      const payload = await parseApiResponse(response)
       if (!response.ok) throw new Error(payload.error || 'Não foi possível reconhecer o alerta.')
       setDashboard((current) => ({
         ...current,
@@ -2156,9 +2178,7 @@ function App() {
       }))
     } catch (requestError) {
       console.error('Falha ao reconhecer o alerta:', requestError)
-      setConfigError(requestError.message === 'Failed to fetch'
-        ? 'Não foi possível conectar ao serviço de alertas.'
-        : requestError.message)
+      setConfigError(normalizeApiError(requestError, 'Não foi possível conectar ao serviço de alertas.'))
     }
   }
 
@@ -2461,7 +2481,7 @@ function App() {
           {error && (
             <div className="error-banner" role="alert">
               <Icon name="alert" size={18} />
-              <div><strong>Não foi possível carregar os dados</strong><span>{error}</span></div>
+              <div><strong>Problema na conexão ou no serviço</strong><span>{error}</span></div>
               <button type="button" onClick={() => loadDashboard()} aria-label="Tentar novamente"><Icon name="refresh" size={16} /></button>
             </div>
           )}
@@ -2622,7 +2642,7 @@ function App() {
                       }
                     } : undefined}
                   >
-                    <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} />
+                    <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} upsDevices={dashboard.ups} />
                     {canEditDashboard && isTopology && <button className="map-drag-handle" type="button" onPointerDown={(event) => moveMapWidgetByPixels(event, widget)} aria-label={`Arraste ${widget.title} para qualquer posição`} title="Arraste para mover livremente"><Icon name="grip" size={14} /></button>}
                     {canEditDashboard && <div className={`widget-controls ${isAdministrator ? '' : 'moderator-controls'}`} role="group" aria-label={`Controles de ${widget.title}`}>
                       {isAdministrator && <><button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button><span className="widget-control-divider" /></>}
@@ -2677,17 +2697,20 @@ function App() {
                 : layout.sections
           ).map((section) => {
             const isConsumptionSection = page === 'dashboard' && section.kind === 'consumption'
+            const isUpsSection = page === 'dashboard' && section.kind === 'ups'
             const sectionWidgets = isConsumptionSection ? layout.widgets.filter((widget) => widget.sectionId === section.id) : []
-            const sectionCards = page === 'servers' && section.id === '__all_servers__'
+            const sectionCards = isUpsSection
+              ? dashboard.ups.filter((ups) => ups.host_name.toLowerCase().includes(search.toLowerCase()))
+              : page === 'servers' && section.id === '__all_servers__'
               ? orderVisible(dashboard.servers, activeLayout.orderServers, activeLayout.hiddenServers)
                 .filter((server) => server.host_name.toLowerCase().includes(search.toLowerCase()))
               : cardsForSection(section)
             const isIcmp = section.kind === 'icmp'
             const isVirtualServerSection = section.id === '__all_servers__'
-            const sectionIcon = isConsumptionSection ? 'activity' : isIcmp ? 'network' : 'server'
-            const sectionCountLabel = isConsumptionSection ? 'indicadores' : isIcmp ? 'sistemas' : 'hosts'
+            const sectionIcon = isConsumptionSection ? 'activity' : isUpsSection ? 'battery' : isIcmp ? 'network' : 'server'
+            const sectionCountLabel = isConsumptionSection ? 'indicadores' : isUpsSection ? 'nobreaks' : isIcmp ? 'sistemas' : 'hosts'
             const cardEmptyTitle = loading
-              ? (isIcmp ? 'Conectando ao Zabbix...' : 'Carregando servidores...')
+              ? (isUpsSection ? 'Carregando nobreaks...' : isIcmp ? 'Conectando ao Zabbix...' : 'Carregando servidores...')
               : search
                 ? 'Nenhum host encontrado'
                 : 'Seção sem cards'
@@ -2695,36 +2718,44 @@ function App() {
               ? 'Os indicadores aparecerão assim que os dados forem carregados.'
               : search
                 ? 'Tente outro nome de host.'
-                : 'Ative a edição do painel e adicione ou mova cards para esta seção.'
+                : isUpsSection
+                  ? 'Nenhum nobreak ativo foi encontrado no Zabbix.'
+                  : 'Ative a edição do painel e adicione ou mova cards para esta seção.'
 
             return (
               <section className="content-section" id={section.id} key={section.id}>
                 <div className="section-title-row">
                   <div className="section-title">
                     <span className={`section-icon ${isConsumptionSection ? 'consumption-icon' : isIcmp ? 'network-icon' : 'server-icon'}`}><Icon name={sectionIcon} size={17} /></span>
-                    <div><h2>{section.title}</h2><p>{isConsumptionSection ? 'Tráfego, volume e consumo ao longo do tempo' : isIcmp ? 'Disponibilidade, latência e perda de pacotes' : 'Uso de CPU, memória e armazenamento'}</p></div>
+                    <div><h2>{section.title}</h2><p>{isConsumptionSection ? 'Tráfego, volume e consumo ao longo do tempo' : isUpsSection ? 'Bateria, carga, autonomia e alertas de energia' : isIcmp ? 'Disponibilidade, latência e perda de pacotes' : 'Uso de CPU, memória e armazenamento'}</p></div>
                   </div>
                   <div className="section-actions">
                     <span className="section-counter">{isConsumptionSection ? sectionWidgets.length : sectionCards.length} {sectionCountLabel}</span>
                     {editMode && canEditDashboard && isConsumptionSection && <button className="edit-panel-button consumption-add-button" type="button" onClick={() => setWidgetDialog({ sectionId: section.id })}><Icon name="plus" size={14} />Adicionar métrica</button>}
-                    {editMode && isAdministrator && !isVirtualServerSection && <>
+                    {editMode && isAdministrator && !isVirtualServerSection && !isUpsSection && <>
                       <button className="section-action" type="button" aria-label={`Renomear ${section.title}`} onClick={() => setSectionDialog({ mode: 'rename', id: section.id, title: section.title, kind: section.kind })}><Icon name="edit" size={13} /></button>
                       <button className="section-action section-delete" type="button" aria-label={`Excluir ${section.title}`} onClick={() => handleDeleteSection(section)}><Icon name="trash" size={13} /></button>
                     </>}
                   </div>
                 </div>
-                {editMode && !isVirtualServerSection && !isConsumptionSection && (
+                {editMode && !isVirtualServerSection && !isConsumptionSection && !isUpsSection && (
                   <div className="layout-toolbar">
                     <span><Icon name="grip" size={15} />Arraste para organizar; use a alça no canto do card para redimensionar</span>
                     <HostPicker hosts={availableForSection(section)} onAdd={(name) => handleAddCard(section, name)} />
                   </div>
                 )}
-                {isConsumptionSection ? (
+                {isUpsSection ? (
+                  sectionCards.length ? (
+                    <div className="ups-grid section-ups-grid">
+                      {sectionCards.map((ups) => <UpsCard key={ups.host_name} ups={ups} />)}
+                    </div>
+                  ) : <EmptyState title={cardEmptyTitle} detail={cardEmptyDetail} />
+                ) : isConsumptionSection ? (
                   sectionWidgets.length ? (
                     <div className="custom-widget-grid consumption-widget-grid">
                       {sectionWidgets.map((widget, index) => (
                         <div className={`custom-widget-wrap widget-width-${widget.width || 1}`} style={{ '--widget-height': widget.height || 2 }} key={widget.id}>
-                          <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} />
+                          <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} upsDevices={dashboard.ups} />
                           {canEditDashboard && <div className={`widget-controls ${isAdministrator ? '' : 'moderator-controls'}`} role="group" aria-label={`Controles de ${widget.title}`}>
                             {isAdministrator && <><button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button><span className="widget-control-divider" /></>}
                             <button type="button" onClick={() => moveWidget(widget.id, -1)} disabled={index === 0} aria-label={`Mover ${widget.title} para esquerda`} title="Mover para esquerda"><Icon name="chevron" size={14} className="chevron-left" /></button>
@@ -2797,7 +2828,7 @@ function App() {
       )}
       {sectionDialog && <SectionDialog dialog={sectionDialog} onClose={() => setSectionDialog(null)} onSave={handleSaveSection} />}
       {dashboardCreateOpen && <DashboardCreateDialog onClose={() => setDashboardCreateOpen(false)} onCreate={createDashboard} />}
-      {widgetDialog && <WidgetDialog onClose={() => setWidgetDialog(null)} onSave={saveWidget} widget={widgetDialog.id ? widgetDialog : null} sectionId={widgetDialog.sectionId} dashboardType={layout.type || 'general'} />}
+      {widgetDialog && <WidgetDialog onClose={() => setWidgetDialog(null)} onSave={saveWidget} widget={widgetDialog.id ? widgetDialog : null} sectionId={widgetDialog.sectionId} dashboardType={layout.type || 'general'} upsDevices={dashboard.ups} />}
       {confirmation && <ConfirmDialog title={confirmation.title} message={confirmation.message} confirmLabel={confirmation.confirmLabel} onCancel={() => setConfirmation(null)} onConfirm={() => {
         const action = confirmation.onConfirm
         setConfirmation(null)

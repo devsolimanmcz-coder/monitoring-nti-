@@ -71,8 +71,8 @@ export const DEFAULT_DASHBOARD_CONFIG = {
   conditions: {},
 }
 
-const allowedKinds = new Set(['icmp', 'servers', 'consumption'])
-const allowedWidgets = new Set(['metric', 'timeseries', 'availability', 'gauge', 'table', 'icmp', 'server', 'alerts', 'camera'])
+const allowedKinds = new Set(['icmp', 'servers', 'consumption', 'ups'])
+const allowedWidgets = new Set(['metric', 'timeseries', 'availability', 'gauge', 'table', 'icmp', 'server', 'alerts', 'camera', 'ups'])
 
 function normalizeWidgetGeometry(widget) {
   const mapSizePx = Number(widget.mapSizePx ?? 80)
@@ -96,7 +96,7 @@ function normalizeWidgetGeometry(widget) {
     width: [1, 2, 3, 4].includes(Number(widget.width)) ? Number(widget.width) : 1,
     height: Number.isInteger(Number(widget.height)) && Number(widget.height) >= 1 && Number(widget.height) <= 8
       ? Number(widget.height)
-      : widget.type === 'timeseries' ? 2 : 1,
+      : widget.type === 'ups' ? 3 : widget.type === 'timeseries' ? 2 : 1,
     mapSizePx,
     mapCols,
     mapRows,
@@ -163,6 +163,25 @@ function normalizeDashboard(dashboard) {
       throw new Error('Cada indicador precisa ter um título de até 100 caracteres.')
     }
     const geometry = normalizeWidgetGeometry(widget)
+    if (widget.type === 'ups') {
+      const hostName = typeof widget.hostName === 'string' ? widget.hostName.trim() : ''
+      const sectionId = typeof widget.sectionId === 'string' ? widget.sectionId : ''
+      const section = sections.find((item) => item.id === sectionId)
+      if (!hostName || hostName.length > 255) {
+        throw new Error('Selecione um nobreak válido para o indicador.')
+      }
+      if (widget.sectionId !== undefined && (!sectionId || section?.kind !== 'consumption')) {
+        throw new Error('Indicadores só podem ser associados a seções de consumo válidas.')
+      }
+      return {
+        id: widget.id.slice(0, 80),
+        title: widget.title.trim(),
+        type: 'ups',
+        hostName,
+        ...(sectionId ? { sectionId } : {}),
+        ...geometry,
+      }
+    }
     if (widget.type === 'camera') {
       const sectionId = typeof widget.sectionId === 'string' ? widget.sectionId : ''
       const section = sections.find((item) => item.id === sectionId)

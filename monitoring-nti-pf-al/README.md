@@ -103,6 +103,8 @@ painel e incluir nela gráficos de itens numéricos do Zabbix. Cada gráfico pod
 acompanhar períodos de 15 minutos, 1 hora, 3 horas, 6 horas, 1 dia, 7 dias ou
 30 dias (mensal); os períodos mais longos são resumidos em até 300 amostras
 para preservar a leitura do histórico sem sobrecarregar o painel.
+Também é possível criar uma seção **Nobreaks (energia e autonomia)** para exibir
+os cards dos nobreaks monitorados pelo Zabbix.
 
 Painéis novos começam vazios. Em **Adicionar indicador**, selecione primeiro um
 equipamento do Zabbix e depois um de seus itens numéricos; listas grandes são
@@ -117,6 +119,9 @@ Também é possível adicionar um widget **Câmera ao vivo** usando uma URL HTTP
 HTTPS de imagem/MJPEG; o endereço e o título são salvos junto com o painel. O
 navegador pode bloquear transmissões HTTP quando o próprio painel é servido por
 HTTPS.
+O tipo **Monitoramento de nobreak** permite selecionar um host UPS descoberto no
+Zabbix e exibe no painel o mesmo card de bateria, carga, autonomia, temperatura e
+problemas ativos da página **Nobreaks**.
 
 Ao criar um painel, escolha **Geral** ou **Rede**. O tipo **Rede** começa vazio
 e permite adicionar indicadores de disponibilidade (item com `1 = UP` e

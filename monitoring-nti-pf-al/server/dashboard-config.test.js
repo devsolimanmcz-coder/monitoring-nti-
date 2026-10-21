@@ -123,6 +123,37 @@ test('persists map pixel positions and expanded chart dimensions with item keys'
   assert.equal(savedWidget.items[0].key, 'net.if.in[eth0]')
 })
 
+test('persists UPS dashboard widgets without requiring a Zabbix item', async () => {
+  const config = structuredClone(DEFAULT_DASHBOARD_CONFIG)
+  config.dashboards[0].widgets = [{
+    id: 'ups-widget',
+    title: 'Nobreak sala técnica',
+    type: 'ups',
+    hostName: 'NOBREAK-ATA-1ANDAR',
+    width: 2,
+  }]
+
+  await saveDashboardConfig(config)
+
+  const [savedWidget] = (await readDashboardConfig()).dashboards[0].widgets
+  assert.equal(savedWidget.type, 'ups')
+  assert.equal(savedWidget.hostName, 'NOBREAK-ATA-1ANDAR')
+  assert.equal(savedWidget.height, 3)
+  assert.equal('itemId' in savedWidget, false)
+})
+
+test('rejects UPS dashboard widgets without a host name', async () => {
+  const config = structuredClone(DEFAULT_DASHBOARD_CONFIG)
+  config.dashboards[0].widgets = [{
+    id: 'ups-widget',
+    title: 'Nobreak',
+    type: 'ups',
+    hostName: '',
+  }]
+
+  await assert.rejects(saveDashboardConfig(config), /Selecione um nobreak válido/)
+})
+
 test('rejects out-of-range map sizes', async () => {
   await assert.rejects(
     saveDashboardConfig(configWithWidget({ mapSizePx: 500 })),
@@ -148,6 +179,20 @@ test('persists consumption sections and their monthly chart widgets', async () =
   assert.deepEqual(saved.dashboards[0].sections, config.dashboards[0].sections)
   assert.equal(saved.dashboards[0].widgets[0].sectionId, 'monthly-traffic')
   assert.equal(saved.dashboards[0].widgets[0].range, '30d')
+})
+
+test('persists UPS sections with their monitored hosts', async () => {
+  const config = structuredClone(DEFAULT_DASHBOARD_CONFIG)
+  config.dashboards[0].sections = [{
+    id: 'power-room',
+    title: 'Nobreaks da sala técnica',
+    kind: 'ups',
+  }]
+
+  const saved = await saveDashboardConfig(config)
+
+  assert.equal(saved.dashboards[0].sections[0].kind, 'ups')
+  assert.deepEqual(saved.dashboards[0].widgets, [])
 })
 
 test('accepts the three-hour history range for chart widgets', async () => {

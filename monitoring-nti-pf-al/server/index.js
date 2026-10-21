@@ -599,9 +599,15 @@ app.get('/api/dashboard', requireAuth, async (request, response) => {
         widget.hostName,
         ...(widget.items || []).map((metric) => metric.hostName),
       ]).filter(Boolean)))
+      const permittedUpsHosts = new Set(config.dashboards.flatMap((item) => item.widgets
+        .filter((widget) => widget.type === 'ups')
+        .map((widget) => widget.hostName)))
+      const canReadUpsSection = config.dashboards.some((item) => item.sections.some((section) => section.kind === 'ups'))
       responseDashboard.icmp = permittedKinds.has('icmp') ? responseDashboard.icmp : []
       responseDashboard.servers = permittedKinds.has('servers') ? responseDashboard.servers : []
-      responseDashboard.ups = []
+      responseDashboard.ups = canReadUpsSection
+        ? responseDashboard.ups
+        : responseDashboard.ups.filter((ups) => permittedUpsHosts.has(ups.host_name))
       const visibleAlerts = responseDashboard.alerts.filter((alert) => (
         ['host_unavailable', 'collection_stale', 'high_latency', 'packet_loss'].includes(alert.type)
           ? permittedKinds.has('icmp') || permittedHosts.has(alert.hostName)
@@ -621,6 +627,25 @@ app.get('/api/dashboard', requireAuth, async (request, response) => {
         : 'Falha ao consultar o banco Zabbix. Verifique a conexão e os privilégios SELECT.',
     })
   }
+})
+
+app.use('/api', (request, response) => {
+  response.status(404).json({ error: 'Este serviço da API não foi encontrado. Atualize a página e tente novamente.' })
+})
+
+app.use((error, request, response, next) => {
+  if (response.headersSent) {
+    next(error)
+    return
+  }
+  console.error(`Erro não tratado na API (${request.method} ${request.path}):`, error.message)
+  const status = error.status === 400 || error.status === 413 ? error.status : 500
+  const message = status === 400
+    ? 'A solicitação contém dados inválidos. Revise os campos e tente novamente.'
+    : status === 413
+      ? 'A solicitação excede o limite permitido.'
+      : 'O servidor encontrou um erro inesperado. Tente novamente ou contate o administrador.'
+  response.status(status).json({ error: message })
 })
 
 await initializeApplicationDatabase()
