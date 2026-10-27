@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   addEdge,
   Background,
@@ -56,11 +56,10 @@ export default function TopologyMap({
   onConfigureConnection,
 }) {
   const mapRef = useRef(null)
-  const [mapWidth, setMapWidth] = useState(1104)
+  const flowRef = useRef(null)
   const [selectedNodeIds, setSelectedNodeIds] = useState([])
   const [selectedEdgeIds, setSelectedEdgeIds] = useState([])
   const [positionOverrides, setPositionOverrides] = useState({})
-  const nodeExtent = useMemo(() => [[0, 0], [mapWidth, 1_000_000]], [mapWidth])
   const nodes = useMemo(() => initialNodes.map((node) => {
     const override = positionOverrides[node.id]
     const canKeepLocalPosition = override
@@ -124,6 +123,24 @@ export default function TopologyMap({
 
   const handleNodeDragStop = useCallback((_event, node) => {
     onNodeMove(node.id, node.position)
+    const mapElement = mapRef.current
+    const flow = flowRef.current
+    if (!mapElement || !flow) return
+
+    const { x, y, zoom } = flow.getViewport()
+    const width = (node.measured?.width ?? node.width ?? 0) * zoom
+    const height = (node.measured?.height ?? node.height ?? 0) * zoom
+    const left = node.position.x * zoom + x
+    const top = node.position.y * zoom + y
+    const isOutsideMap = left < 0
+      || top < 0
+      || left + width > mapElement.clientWidth
+      || top + height > mapElement.clientHeight
+    if (isOutsideMap) {
+      window.requestAnimationFrame(() => {
+        flowRef.current?.fitView({ padding: 0.18, maxZoom: 1 })
+      })
+    }
   }, [onNodeMove])
 
   const handleEdgesChange = useCallback((changes) => {
@@ -164,31 +181,12 @@ export default function TopologyMap({
     markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
   }), [editable])
 
-  useEffect(() => {
-    const mapElement = mapRef.current
-    if (!mapElement) return undefined
-
-    const updateMapWidth = () => {
-      const nextWidth = Math.floor(mapElement.clientWidth)
-      setMapWidth((currentWidth) => currentWidth === nextWidth ? currentWidth : nextWidth)
-    }
-
-    updateMapWidth()
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateMapWidth)
-      return () => window.removeEventListener('resize', updateMapWidth)
-    }
-
-    const observer = new ResizeObserver(updateMapWidth)
-    observer.observe(mapElement)
-    return () => observer.disconnect()
-  }, [])
-
   return (
     <section ref={mapRef} className="topology-map" style={{ height }} aria-label="Mapa interativo de topologia de rede">
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        onInit={(flow) => { flowRef.current = flow }}
         nodeTypes={nodeTypes}
         onNodesChange={handleNodesChange}
         onNodeDragStop={handleNodeDragStop}
@@ -206,7 +204,6 @@ export default function TopologyMap({
         nodesDeletable={false}
         edgesDeletable={editable}
         elementsSelectable={editable}
-        nodeExtent={nodeExtent}
         deleteKeyCode={editable ? ['Backspace', 'Delete'] : null}
         defaultEdgeOptions={defaultEdgeOptions}
         fitView
