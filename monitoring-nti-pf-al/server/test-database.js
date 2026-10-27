@@ -28,6 +28,9 @@ export function createTestDatabase() {
     if (sql.startsWith('select user_id, username, password_salt')) {
       return [cloneState(target.users)]
     }
+    if (sql.startsWith('select user_id, role, disabled from app_users')) {
+      return [cloneState(target.users.map(({ user_id, role, disabled }) => ({ user_id, role, disabled })))]
+    }
     if (sql.startsWith('select token_hash, user_id, expires_at from app_sessions')) {
       if (sql.includes('where expires_at > ?')) {
         return [cloneState(target.sessions.filter((session) => session.expires_at > values[0]))]

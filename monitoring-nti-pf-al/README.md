@@ -6,10 +6,9 @@ métricas; um banco próprio armazena as configurações, contas e sessões.
 
 ## Acesso e grupos
 
-Na primeira inicialização, se ainda não existir `data/users.json`, o sistema
-cria a conta de teste `nti` com a senha `ntim4ster` no grupo administrador.
-Troque essa senha antes de disponibilizar o sistema a outras pessoas ou à rede.
-As senhas são armazenadas como hashes scrypt; o arquivo de usuários e as sessões
+Crie explicitamente o primeiro administrador antes de iniciar a aplicação. O
+usuário e a senha são informados no terminal e a senha não é exibida durante a
+digitação. As senhas são armazenadas como hashes scrypt; os usuários e as sessões
 nunca são compartilhados com o banco do Zabbix.
 
 Entre pela rota `#/login`. Administradores têm acesso total e gerenciam contas;
@@ -66,6 +65,21 @@ apagados automaticamente: mantenha um backup até confirmar a migração.
 `APP_DATA_DIR` pode apontar para a pasta desses JSONs se ela não estiver em
 `data/` no diretório de execução.
 
+Crie as tabelas do banco da aplicação e, em seguida, a conta administrativa
+inicial:
+
+```bash
+npm run db:migrate
+npm run create-admin
+```
+
+O comando `create-admin` pede usuário, senha e confirmação no terminal; escolha
+uma senha de 8 a 200 caracteres. Ele só cria uma conta quando ainda não existe
+um administrador ativo. Se houver usuários legados em `data/users.json` e o
+banco estiver vazio, ele importa essas contas e acrescenta um administrador
+quando necessário. Depois que houver um administrador, novas contas continuam
+sendo gerenciadas pela interface do sistema.
+
 Inicie a API e o Vite juntos:
 
 ```bash
@@ -116,9 +130,9 @@ são exibidas em unidades legíveis, sem alterar os valores armazenados no Zabbi
 Os históricos dos indicadores são consultados em lotes para reduzir chamadas à
 API e ao banco de dados.
 Também é possível adicionar um widget **Câmera ao vivo** usando uma URL HTTP ou
-HTTPS de imagem/MJPEG; o endereço e o título são salvos junto com o painel. O
-navegador pode bloquear transmissões HTTP quando o próprio painel é servido por
-HTTPS.
+HTTPS de imagem/MJPEG, no topo do painel ou dentro de qualquer seção; o endereço,
+a posição e o título são salvos junto com o painel. O navegador pode bloquear
+transmissões HTTP quando o próprio painel é servido por HTTPS.
 O tipo **Monitoramento de nobreak** permite selecionar um host UPS descoberto no
 Zabbix e exibe no painel o mesmo card de bateria, carga, autonomia, temperatura e
 problemas ativos da página **Nobreaks**.
@@ -131,12 +145,14 @@ mesma unidade. A queda fica vermelha; a recuperação aparece como
 estado em cinco minutos são indicadas como **OSCILANDO** em amarelo. Amostras
 ausentes por mais de três minutos aparecem como **SEM DADOS**.
 
-O tipo **Mapa** também começa vazio. Seus hosts e gráficos ficam em blocos de
-grade encaixável: arraste para reordenar e use os controles de tamanho para
-ampliar ou reduzir cada bloco. Os nós de host mostram um ícone de equipamento e
-o estado de disponibilidade; gráficos podem combinar até oito séries da mesma
-unidade e oferecem períodos de 15 minutos a 30 dias, escala vertical automática
-e rótulos de horário.
+O tipo **Mapa** também começa vazio e usa React Flow para montar a topologia:
+arraste os hosts, gráficos e câmeras para posicionar, conecte os equipamentos
+pelas alças para criar enlaces direcionais animados e navegue com zoom, controles
+e minimapa. As conexões e posições são salvas por painel. Os nós de host mostram
+um ícone de equipamento e o estado de disponibilidade; gráficos podem combinar
+até oito séries da mesma unidade e oferecem períodos de 15 minutos a 30 dias,
+escala vertical automática e rótulos de horário. Ative **Editar painel** para
+mover blocos e criar ou remover conexões.
 
 A configuração dos painéis, as contas e as sessões ficam no banco próprio
 `monitoring_nti`, separado do banco de métricas do Zabbix. Senhas continuam

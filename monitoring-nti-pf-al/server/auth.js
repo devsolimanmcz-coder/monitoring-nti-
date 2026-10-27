@@ -17,17 +17,6 @@ let users = []
 let initialized = false
 let userMutationQueue = Promise.resolve()
 
-const bootstrapAdmin = {
-  id: 'builtin-nti-admin',
-  username: 'nti',
-  passwordSalt: 'TlRJLVBVTFNFLVRFU1QtQURNSU4tMjAyNg',
-  passwordHash: 'No5F4aqpKsyi8JJjoceZcToh3GmikH34qQzjlf0SOrtUAD2hQEqoROrCBqBUHgAFx8MnvSubc0WFMIl9sEkqqw',
-  role: 'administrator',
-  dashboardIds: [],
-  disabled: false,
-  createdAt: '2026-10-15T00:00:00.000Z',
-}
-
 function publicUser(user) {
   return {
     id: user.id,
@@ -149,6 +138,29 @@ function serializeUserMutation(operation) {
   return result
 }
 
+async function readLegacyUsers() {
+  let contents
+  try {
+    contents = await readFile(legacyUsersPath, 'utf8')
+  } catch (error) {
+    if (error.code === 'ENOENT') return null
+    throw error
+  }
+
+  const legacyUsers = JSON.parse(contents)
+  if (!Array.isArray(legacyUsers) || legacyUsers.some((user) => (
+    typeof user.id !== 'string'
+    || typeof user.username !== 'string'
+    || typeof user.passwordSalt !== 'string'
+    || typeof user.passwordHash !== 'string'
+    || !['administrator', 'moderator', 'view'].includes(user.role)
+    || !Array.isArray(user.dashboardIds)
+  ))) {
+    throw new Error('O arquivo de usuários contém dados inválidos.')
+  }
+  return legacyUsers
+}
+
 export async function initializeAuthStore() {
   if (initialized) return
   await initializeApplicationDatabase()
@@ -170,27 +182,15 @@ export async function initializeAuthStore() {
       createdAt: row.created_at,
     }))
   } else {
-    try {
-      const contents = await readFile(legacyUsersPath, 'utf8')
-      users = JSON.parse(contents)
-      if (!Array.isArray(users) || users.some((user) => (
-        typeof user.id !== 'string'
-        || typeof user.username !== 'string'
-        || typeof user.passwordSalt !== 'string'
-        || typeof user.passwordHash !== 'string'
-        || !['administrator', 'moderator', 'view'].includes(user.role)
-        || !Array.isArray(user.dashboardIds)
-      ))) {
-        throw new Error('O arquivo de usuários contém dados inválidos.')
-      }
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error
-      users = [{ ...bootstrapAdmin, dashboardIds: [] }]
+    const legacyUsers = await readLegacyUsers()
+    if (legacyUsers === null) {
+      throw new Error('Nenhuma conta foi encontrada. Execute `npm run create-admin` para criar o primeiro administrador.')
     }
+    users = legacyUsers
     await persistUsers(users)
   }
   if (!users.some((user) => user.role === 'administrator' && !user.disabled)) {
-    throw new Error('É necessário manter pelo menos uma conta administradora ativa.')
+    throw new Error('Não há administrador ativo. Execute `npm run create-admin` para criar uma conta administradora.')
   }
 
   const now = Date.now()
@@ -241,6 +241,83 @@ export async function initializeAuthStore() {
 
 function ensureInitialized() {
   if (!initialized) throw new Error('O serviço de autenticação ainda não foi inicializado.')
+}
+
+export async function createInitialAdmin(usernameInput, password) {
+  await initializeApplicationDatabase()
+
+  const username = typeof usernameInput === 'string' ? usernameInput.trim().toLowerCase() : ''
+  if (!/^[a-z0-9._-]{3,40}$/.test(username)) {
+    throw new Error('Use um usuário de 3 a 40 caracteres (letras, números, ponto, _ ou -).')
+  }
+  if (typeof password !== 'string' || password.length < 8 || password.length > 200) {
+    throw new Error('A senha precisa ter entre 8 e 200 caracteres.')
+  }
+
+  const salt = randomBytes(16)
+  const passwordHash = await scrypt(password, salt, 64, {
+    N: 16_384,
+    r: 8,
+    p: 1,
+    maxmem: 64 * 1024 * 1024,
+  })
+  const user = {
+    id: randomBytes(18).toString('base64url'),
+    username,
+    passwordSalt: salt.toString('base64url'),
+    passwordHash: passwordHash.toString('base64url'),
+    role: 'administrator',
+    dashboardIds: [],
+    disabled: false,
+    createdAt: new Date().toISOString(),
+  }
+
+  const connection = await getApplicationDatabase().getConnection()
+  try {
+    await connection.beginTransaction()
+    const [existingUsers] = await connection.query(
+      'SELECT user_id, role, disabled FROM app_users FOR UPDATE',
+    )
+    if (!existingUsers.length) {
+      const legacyUsers = await readLegacyUsers()
+      if (legacyUsers) {
+        for (const legacyUser of legacyUsers) {
+          await writeUserRecord(connection, legacyUser)
+          existingUsers.push({
+            user_id: legacyUser.id,
+            role: legacyUser.role,
+            disabled: legacyUser.disabled ? 1 : 0,
+          })
+        }
+      }
+    }
+    if (existingUsers.some((existing) => existing.role === 'administrator' && !existing.disabled)) {
+      throw new Error('Já existe um administrador ativo. Crie outras contas pela interface do sistema.')
+    }
+    await connection.execute(
+      `INSERT INTO app_users
+        (user_id, username, password_salt, password_hash, role, dashboard_ids, disabled, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        user.id,
+        user.username,
+        user.passwordSalt,
+        user.passwordHash,
+        user.role,
+        JSON.stringify(user.dashboardIds),
+        0,
+        user.createdAt,
+      ],
+    )
+    await connection.commit()
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+
+  return publicUser(user)
 }
 
 export async function authenticateUser(username, password, remoteAddress = 'unknown') {
@@ -334,7 +411,7 @@ export async function addUser(input, validDashboardIds) {
     const password = typeof input.password === 'string' ? input.password : ''
     if (!/^[a-z0-9._-]{3,40}$/.test(username)) throw new Error('Use um usuário de 3 a 40 caracteres (letras, números, ponto, _ ou -).')
     if (users.some((user) => user.username === username)) throw new Error('Esse usuário já existe.')
-    if (password.length < 12 || password.length > 200) throw new Error('A senha precisa ter entre 12 e 200 caracteres.')
+    if (password.length < 8 || password.length > 200) throw new Error('A senha precisa ter entre 8 e 200 caracteres.')
     if (!['administrator', 'moderator', 'view'].includes(input.role)) throw new Error('Grupo de acesso inválido.')
     const salt = randomBytes(16)
     const passwordHash = await scrypt(password, salt, 64, {
@@ -382,8 +459,8 @@ export async function updateUser(userId, input, validDashboardIds) {
       disabled: input.disabled === undefined ? current.disabled : Boolean(input.disabled),
     }
     if (input.password !== undefined && input.password !== '') {
-      if (typeof input.password !== 'string' || input.password.length < 12 || input.password.length > 200) {
-        throw new Error('A nova senha precisa ter entre 12 e 200 caracteres.')
+      if (typeof input.password !== 'string' || input.password.length < 8 || input.password.length > 200) {
+        throw new Error('A nova senha precisa ter entre 8 e 200 caracteres.')
       }
       const salt = randomBytes(16)
       const passwordHash = await scrypt(input.password, salt, 64, {

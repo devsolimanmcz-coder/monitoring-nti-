@@ -13,6 +13,7 @@ setApplicationDatabaseForTests(testDatabase)
 const {
   addUser,
   authenticateUser,
+  createInitialAdmin,
   deleteUser,
   getAuthenticatedUser,
   initializeAuthStore,
@@ -20,26 +21,32 @@ const {
   updateUser,
 } = await import('./auth.js')
 
+await assert.rejects(initializeAuthStore(), /npm run create-admin/)
+const administrator = await createInitialAdmin('NTI', 'senha-inicial-segura-123')
 await initializeAuthStore()
 
 after(async () => {
   await rm(temporaryDirectory, { recursive: true, force: true })
 })
 
-test('bootstraps a test administrator and authenticates with a revocable session', async () => {
-  const session = await authenticateUser('NTI', 'ntim4ster', '127.0.0.1')
+test('creates an administrator with supplied credentials and authenticates with a revocable session', async () => {
+  assert.equal(administrator.username, 'nti')
+  assert.equal(administrator.role, 'administrator')
+  await assert.rejects(createInitialAdmin('weak-admin', '1234567'), /8 e 200 caracteres/)
+  await assert.rejects(createInitialAdmin('other-admin', 'senha-inicial-segura-123'), /Já existe um administrador ativo/)
+  const session = await authenticateUser('NTI', 'senha-inicial-segura-123', '127.0.0.1')
   assert.equal(session.user.username, 'nti')
   assert.equal(session.user.role, 'administrator')
   assert.equal(getAuthenticatedUser(session.token).id, session.user.id)
 
-  await assert.rejects(authenticateUser('nti', 'wrong-password', '127.0.0.2'), /Usuário ou senha inválidos/)
+  await assert.rejects(authenticateUser('nti', 'senha-incorreta', '127.0.0.2'), /Usuário ou senha inválidos/)
 })
 
 test('persists session hashes without storing raw tokens', async () => {
   const [beforeLogin] = await testDatabase.query(
     'SELECT token_hash, user_id, expires_at FROM app_sessions',
   )
-  const session = await authenticateUser('nti', 'ntim4ster', '127.0.0.4')
+  const session = await authenticateUser('nti', 'senha-inicial-segura-123', '127.0.0.4')
   const [records] = await testDatabase.query(
     'SELECT token_hash, user_id, expires_at FROM app_sessions',
   )
@@ -73,7 +80,7 @@ test('manages viewer access, validates password strength, and revokes disabled a
     password: 'short',
     role: 'view',
     dashboardIds: ['network-dashboard'],
-  }, validDashboardIds), /12 e 200 caracteres/)
+  }, validDashboardIds), /8 e 200 caracteres/)
 
   const viewer = await addUser({
     username: 'viewer',
@@ -98,14 +105,14 @@ test('manages viewer access, validates password strength, and revokes disabled a
   )
   assert.equal(remainingSessions.some((record) => record.user_id === viewer.id), false)
   assert.equal(listUsers().some((user) => user.username === 'viewer'), true)
-  await deleteUser(viewer.id, 'builtin-nti-admin')
+  await deleteUser(viewer.id, administrator.id)
   assert.equal(listUsers().some((user) => user.username === 'viewer'), false)
 })
 
 test('prevents an administrator from removing their own access or the final admin', async () => {
-  await assert.rejects(updateUser('builtin-nti-admin', {
+  await assert.rejects(updateUser(administrator.id, {
     role: 'moderator',
-    requesterId: 'builtin-nti-admin',
+    requesterId: administrator.id,
   }, new Set()), /próprio acesso/)
-  await assert.rejects(deleteUser('builtin-nti-admin', 'another-admin'), /pelo menos uma conta administradora/)
+  await assert.rejects(deleteUser(administrator.id, 'another-admin'), /pelo menos uma conta administradora/)
 })

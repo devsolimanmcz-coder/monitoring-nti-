@@ -24,8 +24,8 @@ const defaultDashboard = () => ({
   assignments: {},
   cardSizes: {},
   widgets: [],
+  connections: [],
 })
-
 const defaultConnectivityLayout = () => ({
   sections: [],
   hiddenIcmp: [],
@@ -184,9 +184,8 @@ function normalizeDashboard(dashboard) {
     }
     if (widget.type === 'camera') {
       const sectionId = typeof widget.sectionId === 'string' ? widget.sectionId : ''
-      const section = sections.find((item) => item.id === sectionId)
-      if (widget.sectionId !== undefined && (!sectionId || section?.kind !== 'consumption')) {
-        throw new Error('Indicadores só podem ser associados a seções de consumo válidas.')
+      if (widget.sectionId !== undefined && (!sectionId || !sectionIds.has(sectionId))) {
+        throw new Error('A câmera deve ser associada a uma seção válida do painel.')
       }
       return {
         id: widget.id.slice(0, 80),
@@ -255,6 +254,34 @@ function normalizeDashboard(dashboard) {
     }
   })
 
+  const widgetIds = new Set(widgets.map((widget) => widget.id))
+  if (widgetIds.size !== widgets.length) {
+    throw new Error('Os identificadores dos indicadores devem ser únicos em cada painel.')
+  }
+  const dashboardType = ['network', 'topology'].includes(dashboard.type) ? dashboard.type : 'general'
+  const connectionIds = new Set()
+  const connectionsInput = dashboard.connections ?? []
+  if (!Array.isArray(connectionsInput) || connectionsInput.length > 2000) {
+    throw new Error('O mapa pode ter no máximo 2000 conexões.')
+  }
+  if (connectionsInput.length && dashboardType !== 'topology') {
+    throw new Error('Conexões só podem ser salvas em painéis do tipo Mapa.')
+  }
+  const connections = connectionsInput.map((connection) => {
+    const id = typeof connection?.id === 'string' ? connection.id.trim() : ''
+    const source = typeof connection?.source === 'string' ? connection.source : ''
+    const target = typeof connection?.target === 'string' ? connection.target : ''
+    if (!/^[a-zA-Z0-9_-]{1,160}$/.test(id)
+      || connectionIds.has(id)
+      || !widgetIds.has(source)
+      || !widgetIds.has(target)
+      || source === target) {
+      throw new Error('Conexão inválida no mapa. Verifique os indicadores de origem e destino.')
+    }
+    connectionIds.add(id)
+    const label = typeof connection.label === 'string' ? connection.label.trim().slice(0, 80) : ''
+    return { id, source, target, ...(label ? { label } : {}) }
+  })
   const normalizeNames = (items, field) => {
     if (!Array.isArray(items)) throw new Error(`Campo ${field} inválido.`)
     return [...new Set(items.filter((item) => typeof item === 'string').map((item) => item.slice(0, 255)))]
@@ -272,7 +299,7 @@ function normalizeDashboard(dashboard) {
   return {
     id: String(dashboard.id || '').slice(0, 80),
     title: dashboard.title.trim().replace(/^Novo dashboard (\d+)$/i, 'Novo painel $1').slice(0, 100),
-    type: ['network', 'topology'].includes(dashboard.type) ? dashboard.type : 'general',
+    type: dashboardType,
     favorite: Boolean(dashboard.favorite),
     sections,
     hiddenIcmp: normalizeNames(dashboard.hiddenIcmp, 'hiddenIcmp'),
@@ -282,6 +309,7 @@ function normalizeDashboard(dashboard) {
     assignments,
     cardSizes: normalizeCardSizes(dashboard.cardSizes),
     widgets,
+    connections,
   }
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CategoryScale,
   Chart as ChartJS,
@@ -14,6 +14,8 @@ import { normalizeApiError, parseApiResponse } from './api-response.js'
 import { formatMetricSeriesGroups } from './metric-format.js'
 import { getAvailabilityStatus } from './widget-status.js'
 import './App.css'
+
+const TopologyMap = lazy(() => import('./TopologyMap.jsx'))
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip)
 
@@ -45,6 +47,7 @@ const EMPTY_LAYOUT = {
   assignments: {},
   cardSizes: {},
   widgets: [],
+  connections: [],
 }
 
 const EMPTY_CONNECTIVITY_LAYOUT = {
@@ -505,7 +508,7 @@ function CameraWidget({ widget }) {
         <span className="widget-unit">MJPEG</span>
       </div>
       <div className="camera-stream">
-        <img src={widget.cameraUrl} alt={`Transmissão ao vivo: ${widget.title}`} onError={() => setStreamError(true)} />
+        <img src={widget.cameraUrl} draggable="false" alt={`Transmissão ao vivo: ${widget.title}`} onError={() => setStreamError(true)} />
         {streamError && <span className="camera-stream-error" role="status">Não foi possível carregar a câmera. Verifique o endereço, a conexão e as permissões.</span>}
       </div>
     </article>
@@ -680,8 +683,10 @@ function MetricWidget({ widget, data, upsDevices = [] }) {
   )
 }
 
-function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId, upsDevices = [] }) {
-  const initialType = widget?.type || (sectionId ? 'timeseries' : ['network', 'topology'].includes(dashboardType) ? 'availability' : 'timeseries')
+function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId, sectionKind, sections = [], upsDevices = [] }) {
+  const initialType = widget?.type || (sectionId
+    ? sectionKind === 'consumption' ? 'timeseries' : 'camera'
+    : ['network', 'topology'].includes(dashboardType) ? 'availability' : 'timeseries')
   const [hosts, setHosts] = useState([])
   const [catalog, setCatalog] = useState([])
   const [selectedItemDetails, setSelectedItemDetails] = useState(widget?.items || [])
@@ -694,6 +699,7 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId, upsDe
   const [title, setTitle] = useState(widget?.title || '')
   const [type, setType] = useState(initialType)
   const [cameraUrl, setCameraUrl] = useState(widget?.cameraUrl || 'http://10.82.7.226/video.mjpg')
+  const [cameraSectionId, setCameraSectionId] = useState(widget?.sectionId || sectionId || '')
   const [upsHostName, setUpsHostName] = useState(widget?.hostName || '')
   const [search, setSearch] = useState('')
   const [itemPage, setItemPage] = useState(0)
@@ -825,7 +831,7 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId, upsDe
         title: title.trim() || 'Câmera ao vivo',
         type: 'camera',
         cameraUrl: url.href,
-        ...((widget?.sectionId || sectionId) ? { sectionId: widget?.sectionId || sectionId } : {}),
+        ...(cameraSectionId ? { sectionId: cameraSectionId } : {}),
         mapSizePx,
         mapCols: widget?.mapCols || 4,
         mapRows: widget?.mapRows || 4,
@@ -864,11 +870,16 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId, upsDe
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <form className={`section-dialog widget-dialog ${type === 'timeseries' ? 'timeseries-dialog' : ''}`} role="dialog" aria-modal="true" aria-labelledby="widget-dialog-title" onSubmit={submit}>
         <div className="dialog-heading"><div><span className="eyebrow">{type === 'camera' ? 'TRANSMISSÃO AO VIVO' : type === 'ups' ? 'MONITORAMENTO DE ENERGIA' : 'MÉTRICAS NUMÉRICAS DO ZABBIX'}</span><h2 id="widget-dialog-title">{widget ? 'Configurar indicador' : 'Adicionar indicador'}</h2></div><button className="dialog-close" type="button" aria-label="Fechar" onClick={onClose}><Icon name="close" size={17} /></button></div>
-        {!sectionId && <label className="dialog-field widget-type-field"><span>Tipo de visualização</span><select value={type} onChange={(event) => { const nextType = event.target.value; setType(nextType); setError(''); if (nextType !== 'timeseries') { setSelectedItemIds((current) => current.slice(0, 1)); setItemId((current) => current || String(selectedItemIds[0] || '')) } }}>
-          {['network', 'topology'].includes(dashboardType) ? <><option value="availability">Host UP / DOWN</option><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="camera">Câmera ao vivo</option><option value="ups">Monitoramento de nobreak</option></> : <><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="metric">Valor atual</option><option value="camera">Câmera ao vivo</option><option value="ups">Monitoramento de nobreak</option></>}
-        </select></label>}
+        <label className="dialog-field widget-type-field"><span>Tipo de visualização</span><select value={type} onChange={(event) => { const nextType = event.target.value; setType(nextType); setError(''); if (nextType !== 'timeseries') { setSelectedItemIds((current) => current.slice(0, 1)); setItemId((current) => current || String(selectedItemIds[0] || '')) } }}>
+          {sectionId && sectionKind !== 'consumption'
+            ? <option value="camera">Câmera ao vivo</option>
+            : ['network', 'topology'].includes(dashboardType)
+              ? <><option value="availability">Host UP / DOWN</option><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="camera">Câmera ao vivo</option><option value="ups">Monitoramento de nobreak</option></>
+              : <><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="metric">Valor atual</option><option value="camera">Câmera ao vivo</option><option value="ups">Monitoramento de nobreak</option></>}
+        </select></label>
         {type === 'ups' && <label className="dialog-field"><span>Nobreak</span><select autoFocus value={upsHostName} onChange={(event) => { setUpsHostName(event.target.value); setTitle(event.target.value); setError('') }} required><option value="">{upsDevices.length ? 'Selecione um nobreak...' : 'Nenhum nobreak disponível no Zabbix'}</option>{upsDevices.map((item) => <option key={item.host_name} value={item.host_name}>{item.host_name}</option>)}</select><span className="dialog-hint">Os dados de bateria, carga, autonomia e alertas serão atualizados junto com o painel.</span></label>}
         {type === 'camera' && <>
+          {sections.length > 0 && <label className="dialog-field"><span>Posição da câmera</span><select value={cameraSectionId} onChange={(event) => setCameraSectionId(event.target.value)}><option value="">Topo do painel</option>{sections.map((section) => <option key={section.id} value={section.id}>{section.title}</option>)}</select><span className="dialog-hint">Escolha em qual seção do painel a câmera será exibida.</span></label>}
           <label className="dialog-field"><span>Endereço da transmissão</span><input type="url" value={cameraUrl} onChange={(event) => { setCameraUrl(event.target.value); setError('') }} placeholder="http://10.82.7.226/video.mjpg" required /></label>
           <p className="dialog-hint">A câmera precisa estar acessível neste navegador. Em uma página HTTPS, o navegador pode bloquear transmissões HTTP por conteúdo misto.</p>
         </>}
@@ -1154,7 +1165,7 @@ function UserAdministration({ dashboards, currentUser }) {
         <h3>Criar usuário</h3>
         <div className="user-create-fields">
           <label className="dialog-field"><span>Nome de usuário</span><input minLength="3" maxLength="40" autoComplete="off" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="ex.: operador-01" required /></label>
-          <label className="dialog-field"><span>Senha inicial · mínimo 12 caracteres</span><input type="password" minLength="12" maxLength="200" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
+          <label className="dialog-field"><span>Senha inicial · mínimo 8 caracteres</span><input type="password" minLength="8" maxLength="200" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
           <label className="dialog-field"><span>Grupo</span><select value={role} onChange={(event) => { setRole(event.target.value); setDashboardIds([]) }}>{Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         </div>
         {role === 'view' && <fieldset className="dashboard-permissions"><legend>Painéis que este usuário poderá visualizar</legend>{dashboards.map((dashboard) => <label key={dashboard.id}><input type="checkbox" checked={dashboardIds.includes(dashboard.id)} onChange={() => setDashboardIds((current) => toggleDashboard(current, dashboard.id))} />{dashboard.title}</label>)}</fieldset>}
@@ -1169,7 +1180,7 @@ function UserAdministration({ dashboards, currentUser }) {
               <div className="user-row-heading"><span className={`user-state ${user.disabled ? 'disabled' : ''}`} /><div><strong>{user.username}</strong><small>{user.disabled ? 'Conta desativada' : ROLE_LABELS[user.role]}</small></div>{isSelf && <span className="user-self-tag">Sua conta</span>}</div>
               <div className="user-row-edit">
                 <label className="dialog-field"><span>Grupo</span><select value={draft.role} disabled={isSelf} onChange={(event) => setDrafts((current) => ({ ...current, [user.id]: { ...current[user.id], role: event.target.value, dashboardIds: event.target.value === 'view' ? current[user.id].dashboardIds : [] } }))}>{Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-                <label className="dialog-field"><span>Redefinir senha (opcional)</span><input type="password" minLength="12" maxLength="200" autoComplete="new-password" value={draft.password} placeholder="Mínimo 12 caracteres" onChange={(event) => setDrafts((current) => ({ ...current, [user.id]: { ...current[user.id], password: event.target.value } }))} /></label>
+                <label className="dialog-field"><span>Redefinir senha (opcional)</span><input type="password" minLength="8" maxLength="200" autoComplete="new-password" value={draft.password} placeholder="Mínimo 8 caracteres" onChange={(event) => setDrafts((current) => ({ ...current, [user.id]: { ...current[user.id], password: event.target.value } }))} /></label>
               </div>
               {draft.role === 'view' && <fieldset className="dashboard-permissions"><legend>Painéis atribuídos</legend>{dashboards.map((dashboard) => <label key={dashboard.id}><input type="checkbox" checked={draft.dashboardIds.includes(dashboard.id)} onChange={() => setDrafts((current) => ({ ...current, [user.id]: { ...current[user.id], dashboardIds: toggleDashboard(current[user.id].dashboardIds, dashboard.id) } }))} />{dashboard.title}</label>)}</fieldset>}
               <div className="user-row-actions"><button className="edit-panel-button" type="button" disabled={saving} onClick={() => saveUser(user)}>Salvar permissões</button>{!isSelf && <><button className="section-action" type="button" disabled={saving} onClick={() => setUserDisabled(user, !user.disabled)}>{user.disabled ? 'Ativar conta' : 'Desativar conta'}</button><button className="section-action section-delete" type="button" disabled={saving} onClick={() => setUserToDelete(user)} aria-label={`Excluir ${user.username}`}><Icon name="trash" size={14} /></button></>}</div>
@@ -1871,13 +1882,11 @@ function App() {
             ...current,
             sections: current.sections.filter((candidate) => candidate.id !== section.id),
             assignments,
-            widgets: section.kind === 'consumption'
-              ? current.widgets.map((widget) => {
-                if (widget.sectionId !== section.id) return widget
-                if (fallback) return { ...widget, sectionId: fallback.id }
-                return Object.fromEntries(Object.entries(widget).filter(([key]) => key !== 'sectionId'))
-              })
-              : current.widgets,
+            widgets: current.widgets.map((widget) => {
+              if (widget.sectionId !== section.id) return widget
+              if (fallback) return { ...widget, sectionId: fallback.id }
+              return Object.fromEntries(Object.entries(widget).filter(([key]) => key !== 'sectionId'))
+            }),
           }
         })
       },
@@ -1910,6 +1919,7 @@ function App() {
   }
 
   const duplicateDashboard = (source) => {
+    const widgetIds = new Map(source.widgets.map((widget) => [widget.id, createId()]))
     const copy = {
       ...source,
       id: `dashboard-${createId()}`,
@@ -1917,7 +1927,13 @@ function App() {
       favorite: false,
       sections: source.sections.map((section) => ({ ...section })),
       assignments: { ...source.assignments },
-      widgets: source.widgets.map((widget) => ({ ...widget, id: createId() })),
+      widgets: source.widgets.map((widget) => ({ ...widget, id: widgetIds.get(widget.id) })),
+      connections: (source.connections || []).map((connection) => ({
+        ...connection,
+        id: createId(),
+        source: widgetIds.get(connection.source),
+        target: widgetIds.get(connection.target),
+      })),
     }
     setConfig((current) => ({ ...current, dashboards: [...current.dashboards, copy] }))
   }
@@ -1963,7 +1979,11 @@ function App() {
   }
 
   const copyMap = () => {
-    setMapClipboard({ title: layout.title, widgets: resolveMapPositions(layout.widgets) })
+    setMapClipboard({
+      title: layout.title,
+      widgets: resolveMapPositions(layout.widgets),
+      connections: layout.connections || [],
+    })
     setSaveNotice({ type: 'success', message: `Mapa "${layout.title}" copiado.` })
   }
 
@@ -1976,7 +1996,18 @@ function App() {
       const widgets = mapClipboard.widgets.map((widget) => {
         return { ...widget, id: createId(), mapY: widget.mapY + verticalOffset }
       })
-      return { ...current, widgets: [...current.widgets, ...widgets] }
+      const widgetIds = new Map(mapClipboard.widgets.map((widget, index) => [widget.id, widgets[index].id]))
+      const connections = mapClipboard.connections.map((connection) => ({
+        ...connection,
+        id: createId(),
+        source: widgetIds.get(connection.source),
+        target: widgetIds.get(connection.target),
+      }))
+      return {
+        ...current,
+        widgets: [...current.widgets, ...widgets],
+        connections: [...(current.connections || []), ...connections],
+      }
     })
     setSaveNotice({ type: 'success', message: `Mapa "${mapClipboard.title}" adicionado ao painel.` })
   }
@@ -2110,38 +2141,6 @@ function App() {
     })
   }
 
-  const moveMapWidgetByPixels = (event, widget) => {
-    event.preventDefault()
-    event.stopPropagation()
-    const startX = event.clientX
-    const startY = event.clientY
-    const sourcePosition = mapPositions.find((item) => item.id === widget.id)
-    if (!sourcePosition) return
-    const updatePosition = (moveEvent) => {
-      const mapX = Math.max(0, Math.round(sourcePosition.mapX + moveEvent.clientX - startX))
-      const mapY = Math.max(0, Math.round(sourcePosition.mapY + moveEvent.clientY - startY))
-      setLayout((current) => ({
-        ...current,
-        widgets: current.widgets.map((item) => {
-          const position = mapPositions.find((candidate) => candidate.id === item.id)
-          return {
-            ...item,
-            mapX: item.id === widget.id ? mapX : position?.mapX ?? item.mapX ?? 0,
-            mapY: item.id === widget.id ? mapY : position?.mapY ?? item.mapY ?? 0,
-          }
-        }),
-      }))
-    }
-    const stopPosition = () => {
-      window.removeEventListener('pointermove', updatePosition)
-      window.removeEventListener('pointerup', stopPosition)
-      window.removeEventListener('pointercancel', stopPosition)
-    }
-    window.addEventListener('pointermove', updatePosition)
-    window.addEventListener('pointerup', stopPosition)
-    window.addEventListener('pointercancel', stopPosition)
-  }
-
   const resizeMapWidgetByDrag = (event, widget) => {
     event.preventDefault()
     event.stopPropagation()
@@ -2267,7 +2266,7 @@ function App() {
     overview: ['Visão geral', 'Saúde operacional da infraestrutura e incidentes prioritários.'],
     dashboards: ['Painéis', 'Crie, organize e personalize painéis independentes.'],
     dashboard: [layout.title, layout.type === 'topology'
-      ? 'Arraste pela alça para posicionar cada item livremente, pixel a pixel; redimensione pelo canto.'
+      ? 'Conecte equipamentos e indicadores com enlaces direcionais; mova, amplie e navegue pelo mapa.'
       : layout.type === 'network'
         ? 'Disponibilidade e tráfego de rede monitorados em tempo real.'
         : 'Painel personalizado com métricas reais do Zabbix.'],
@@ -2290,6 +2289,69 @@ function App() {
     ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(lastUpdated)
     : 'aguardando dados'
   const dataIsStale = Boolean(error || (lastUpdated && clockNow - lastUpdated.getTime() > refreshSeconds * 2000))
+
+  const removeWidget = (widget) => setConfirmation({
+    title: 'Excluir indicador?',
+    message: `O indicador "${widget.title}" será removido deste painel. Esta ação não pode ser desfeita.`,
+    onConfirm: () => setLayout((current) => ({
+      ...current,
+      widgets: current.widgets.filter((item) => item.id !== widget.id),
+      connections: (current.connections || []).filter((connection) => (
+        connection.source !== widget.id && connection.target !== widget.id
+      )),
+    })),
+  })
+
+  const renderDashboardWidget = (widget, index, isTopology = false) => {
+    const isMapHost = isTopology && widget.type === 'availability'
+    const mapSize = widget.mapSizePx || 80
+    const mapCols = widget.mapCols || 4
+    const mapRows = widget.mapRows || 4
+    const widgetCount = layout.widgets.filter((item) => !item.sectionId).length
+    return (
+      <div
+        className={`custom-widget-wrap ${isTopology
+          ? `topology-widget-wrap ${isMapHost ? 'topology-host-wrap' : 'topology-chart-wrap'}`
+          : `widget-width-${widget.width || 1}`}`}
+        style={isTopology
+          ? { '--map-size': `${mapSize}px`, width: '100%', height: '100%' }
+          : { '--widget-height': widget.height || (widget.type === 'timeseries' ? 2 : 1) }}
+        key={widget.id}
+        draggable={!isTopology && canEditDashboard}
+        onDragStart={!isTopology && canEditDashboard ? (event) => event.dataTransfer.setData('text/plain', widget.id) : undefined}
+        onDragOver={!isTopology && canEditDashboard ? (event) => event.preventDefault() : undefined}
+        onDrop={!isTopology && canEditDashboard ? (event) => {
+          event.preventDefault()
+          const draggedId = event.dataTransfer.getData('text/plain')
+          const fromIndex = layout.widgets.findIndex((item) => item.id === draggedId)
+          const toIndex = layout.widgets.findIndex((item) => item.id === widget.id)
+          if (fromIndex >= 0 && toIndex >= 0 && fromIndex !== toIndex) {
+            const reordered = [...layout.widgets]
+            const [dragged] = reordered.splice(fromIndex, 1)
+            reordered.splice(toIndex, 0, dragged)
+            setLayout((current) => ({ ...current, widgets: reordered }))
+          }
+        } : undefined}
+      >
+        <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} upsDevices={dashboard.ups} />
+        {canEditDashboard && <div className={`widget-controls nodrag ${isAdministrator ? '' : 'moderator-controls'}`} role="group" aria-label={`Controles de ${widget.title}`}>
+          {isAdministrator && <><button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button><span className="widget-control-divider" /></>}
+          {!isTopology && <>
+            <button type="button" onClick={() => moveWidget(widget.id, -1)} disabled={index === 0} aria-label={`Mover ${widget.title} para esquerda`} title="Mover para esquerda"><Icon name="chevron" size={14} className="chevron-left" /></button>
+            <button type="button" onClick={() => moveWidget(widget.id, 1)} disabled={index === widgetCount - 1} aria-label={`Mover ${widget.title} para direita`} title="Mover para direita"><Icon name="chevron" size={14} /></button>
+          </>}
+          {isAdministrator && <>
+            <span className="widget-control-divider" />
+            <button type="button" onClick={() => resizeWidget(widget.id, -1)} disabled={isTopology ? isMapHost ? mapSize <= 56 : mapCols <= 2 && mapRows <= 4 : (widget.width || 1) <= 1} aria-label={`Reduzir tamanho de ${widget.title}`} title={isMapHost ? 'Diminuir bloco' : 'Diminuir tamanho'}>−</button>
+            <button type="button" onClick={() => resizeWidget(widget.id, 1)} disabled={isTopology ? isMapHost ? mapSize >= 480 : mapCols >= 24 && mapRows >= 24 : (widget.width || 1) >= 4} aria-label={`Aumentar tamanho de ${widget.title}`} title={isMapHost ? 'Aumentar bloco' : 'Aumentar tamanho'}>+</button>
+            <button type="button" className="widget-remove-button" onClick={() => removeWidget(widget)} aria-label={`Remover ${widget.title}`} title="Remover"><Icon name="close" size={13} /></button>
+          </>}
+        </div>}
+        {isAdministrator && isTopology && widget.type !== 'availability' && <button className="widget-resize-handle nodrag" type="button" onPointerDown={(event) => resizeMapWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
+        {isAdministrator && !isTopology && <button className="widget-resize-handle nodrag" type="button" onPointerDown={(event) => resizeWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
+      </div>
+    )
+  }
 
   if (authLoading) {
     return <main className="login-screen"><div className="loading-banner"><span className="loading-spinner" /><div><strong>Verificando acesso</strong><span>Validando sua sessão segura…</span></div></div></main>
@@ -2599,78 +2661,47 @@ function App() {
             </section>
           )}
 
+          {page === 'dashboard' && layout.type === 'topology' && editMode && canEditDashboard && (
+            <p className="topology-map-hint">Arraste os blocos para posicionar. Para criar um enlace, arraste de uma alça azul até outro equipamento; selecione uma linha e pressione Delete para removê-la.</p>
+          )}
+
           {page === 'dashboard' && layout.widgets.some((widget) => !widget.sectionId) && (
-            <section
-              className={`custom-widget-grid ${layout.type === 'topology' ? 'topology-map' : ''}`}
-              aria-label={layout.type === 'topology' ? 'Mapa personalizável de rede' : 'Indicadores personalizados'}
-              style={layout.type === 'topology' ? { height: `${mapCanvasHeight}px` } : undefined}
-            >
-              {layout.widgets.filter((widget) => !widget.sectionId).map((widget, index) => {
-                const isTopology = layout.type === 'topology'
-                const isMapHost = isTopology && widget.type === 'availability'
-                const mapSize = widget.mapSizePx || 80
-                const mapCols = widget.mapCols || 4
-                const mapRows = widget.mapRows || 4
-                const mapPosition = mapPositions.find((item) => item.id === widget.id)
-                const wrapperClass = isTopology
-                  ? `custom-widget-wrap topology-widget-wrap ${isMapHost ? 'topology-host-wrap' : 'topology-chart-wrap'}`
-                  : `custom-widget-wrap widget-width-${widget.width || 1}`
-                return (
-                  <div
-                    className={wrapperClass}
-                    style={isTopology ? {
-                      '--map-size': `${mapSize}px`,
-                      left: `${mapPosition.mapX}px`,
-                      top: `${mapPosition.mapY}px`,
-                      width: `${mapPosition.width}px`,
-                      height: `${mapPosition.height}px`,
-                    } : { '--widget-height': widget.height || (widget.type === 'timeseries' ? 2 : 1) }}
-                    key={widget.id}
-                    draggable={!isTopology && canEditDashboard}
-                    onDragStart={!isTopology && canEditDashboard ? (event) => event.dataTransfer.setData('text/plain', widget.id) : undefined}
-                    onDragOver={!isTopology && canEditDashboard ? (event) => event.preventDefault() : undefined}
-                    onDrop={!isTopology && canEditDashboard ? (event) => {
-                      event.preventDefault()
-                      const draggedId = event.dataTransfer.getData('text/plain')
-                      const fromIndex = layout.widgets.findIndex((item) => item.id === draggedId)
-                      const toIndex = layout.widgets.findIndex((item) => item.id === widget.id)
-                      if (fromIndex >= 0 && toIndex >= 0 && fromIndex !== toIndex) {
-                        const reordered = [...layout.widgets]
-                        const [dragged] = reordered.splice(fromIndex, 1)
-                        reordered.splice(toIndex, 0, dragged)
-                        setLayout((current) => ({ ...current, widgets: reordered }))
-                      }
-                    } : undefined}
-                  >
-                    <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} upsDevices={dashboard.ups} />
-                    {canEditDashboard && isTopology && <button className="map-drag-handle" type="button" onPointerDown={(event) => moveMapWidgetByPixels(event, widget)} aria-label={`Arraste ${widget.title} para qualquer posição`} title="Arraste para mover livremente"><Icon name="grip" size={14} /></button>}
-                    {canEditDashboard && <div className={`widget-controls ${isAdministrator ? '' : 'moderator-controls'}`} role="group" aria-label={`Controles de ${widget.title}`}>
-                      {isAdministrator && <><button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button><span className="widget-control-divider" /></>}
-                      {!isTopology && <><button type="button" onClick={() => moveWidget(widget.id, -1)} disabled={index === 0} aria-label={`Mover ${widget.title} para esquerda`} title="Mover para esquerda"><Icon name="chevron" size={14} className="chevron-left" /></button>
-                      <button type="button" onClick={() => moveWidget(widget.id, 1)} disabled={index === layout.widgets.filter((item) => !item.sectionId).length - 1} aria-label={`Mover ${widget.title} para direita`} title="Mover para direita"><Icon name="chevron" size={14} /></button></>}
-                      {isAdministrator && <><span className="widget-control-divider" />
-                        <button type="button" onClick={() => resizeWidget(widget.id, -1)} disabled={isTopology ? isMapHost ? mapSize <= 56 : mapCols <= 2 && mapRows <= 4 : (widget.width || 1) <= 1} aria-label={`Reduzir tamanho de ${widget.title}`} title={isMapHost ? 'Diminuir bloco' : 'Diminuir tamanho'}>−</button>
-                        <button type="button" onClick={() => resizeWidget(widget.id, 1)} disabled={isTopology ? isMapHost ? mapSize >= 480 : mapCols >= 24 && mapRows >= 24 : (widget.width || 1) >= 4} aria-label={`Aumentar tamanho de ${widget.title}`} title={isMapHost ? 'Aumentar bloco' : 'Aumentar tamanho'}>+</button>
-                        <button type="button" className="widget-remove-button" onClick={() => setConfirmation({
-                          title: 'Excluir indicador?',
-                          message: `O indicador "${widget.title}" será removido deste painel. Esta ação não pode ser desfeita.`,
-                          onConfirm: () => setLayout((current) => ({ ...current, widgets: current.widgets.filter((item) => item.id !== widget.id) })),
-                        })} aria-label={`Remover ${widget.title}`} title="Remover"><Icon name="close" size={13} /></button>
-                      </>}
-                    </div>}
-                    {isAdministrator && isTopology && widget.type === 'timeseries' && <button className="widget-resize-handle" type="button" onPointerDown={(event) => resizeMapWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
-                    {isAdministrator && !isTopology && <button className="widget-resize-handle" type="button" onPointerDown={(event) => resizeWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
-                  </div>
-                )
-              })}
-            </section>
+            layout.type === 'topology'
+              ? <Suspense fallback={<div className="topology-map-loading" role="status">Carregando mapa interativo...</div>}>
+                <TopologyMap
+                  nodes={mapPositions.map((widget, index) => ({
+                    id: widget.id,
+                    type: 'topologyWidget',
+                    position: { x: widget.mapX, y: widget.mapY },
+                    style: { width: widget.width, height: widget.height },
+                    data: {
+                      editable: canEditDashboard && editMode,
+                      isHost: widget.type === 'availability',
+                      content: renderDashboardWidget(widget, index, true),
+                    },
+                  }))}
+                  connections={layout.connections || []}
+                  editable={canEditDashboard && editMode}
+                  height={`${mapCanvasHeight}px`}
+                  onNodeMove={(id, position) => setLayout((current) => ({
+                    ...current,
+                    widgets: current.widgets.map((widget) => widget.id === id
+                      ? { ...widget, mapX: Math.max(0, Math.round(position.x)), mapY: Math.max(0, Math.round(position.y)) }
+                      : widget),
+                  }))}
+                  onConnectionsChange={(connections) => setLayout((current) => ({ ...current, connections }))}
+                />
+              </Suspense>
+              : <section className="custom-widget-grid" aria-label="Indicadores personalizados">
+                {layout.widgets.filter((widget) => !widget.sectionId).map((widget, index) => renderDashboardWidget(widget, index))}
+              </section>
           )}
 
           {page === 'dashboard' && layout.sections.length === 0 && layout.widgets.length === 0 && (
             <section className="blank-dashboard" aria-label="Painel vazio">
               <span className="blank-dashboard-icon"><Icon name="dashboard" size={23} /></span>
               <h2>Seu painel está vazio</h2>
-              <p>{layout.type === 'topology' ? 'Adicione hosts e gráficos. Depois, arraste pela alça para posicionar cada item pixel a pixel.' : 'Adicione as seções e os indicadores que deseja acompanhar.'}</p>
+              <p>{layout.type === 'topology' ? 'Adicione hosts, gráficos e câmeras. Conecte-os arrastando de uma alça a outro bloco.' : 'Adicione as seções e os indicadores que deseja acompanhar.'}</p>
               <div>
                 {layout.type !== 'topology' && <button className="edit-panel-button" type="button" onClick={() => setSectionDialog({ mode: 'create', title: '', kind: 'icmp' })}><Icon name="plus" size={15} />Adicionar seção</button>}
                 <button className="edit-panel-button" type="button" onClick={() => setWidgetDialog({})}><Icon name="plus" size={15} />{layout.type === 'topology' ? 'Adicionar host ou gráfico' : 'Adicionar indicador'}</button>
@@ -2698,7 +2729,7 @@ function App() {
           ).map((section) => {
             const isConsumptionSection = page === 'dashboard' && section.kind === 'consumption'
             const isUpsSection = page === 'dashboard' && section.kind === 'ups'
-            const sectionWidgets = isConsumptionSection ? layout.widgets.filter((widget) => widget.sectionId === section.id) : []
+            const sectionWidgets = layout.widgets.filter((widget) => widget.sectionId === section.id)
             const sectionCards = isUpsSection
               ? dashboard.ups.filter((ups) => ups.host_name.toLowerCase().includes(search.toLowerCase()))
               : page === 'servers' && section.id === '__all_servers__'
@@ -2730,8 +2761,8 @@ function App() {
                     <div><h2>{section.title}</h2><p>{isConsumptionSection ? 'Tráfego, volume e consumo ao longo do tempo' : isUpsSection ? 'Bateria, carga, autonomia e alertas de energia' : isIcmp ? 'Disponibilidade, latência e perda de pacotes' : 'Uso de CPU, memória e armazenamento'}</p></div>
                   </div>
                   <div className="section-actions">
-                    <span className="section-counter">{isConsumptionSection ? sectionWidgets.length : sectionCards.length} {sectionCountLabel}</span>
-                    {editMode && canEditDashboard && isConsumptionSection && <button className="edit-panel-button consumption-add-button" type="button" onClick={() => setWidgetDialog({ sectionId: section.id })}><Icon name="plus" size={14} />Adicionar métrica</button>}
+                    <span className="section-counter">{isConsumptionSection ? sectionWidgets.length : sectionCards.length} {sectionCountLabel}{!isConsumptionSection && sectionWidgets.length ? ` · ${sectionWidgets.length} câmera(s)` : ''}</span>
+                    {editMode && canEditDashboard && <button className="edit-panel-button consumption-add-button" type="button" onClick={() => setWidgetDialog({ sectionId: section.id, sectionKind: section.kind })}><Icon name="plus" size={14} />{isConsumptionSection ? 'Adicionar indicador' : 'Adicionar câmera'}</button>}
                     {editMode && isAdministrator && !isVirtualServerSection && !isUpsSection && <>
                       <button className="section-action" type="button" aria-label={`Renomear ${section.title}`} onClick={() => setSectionDialog({ mode: 'rename', id: section.id, title: section.title, kind: section.kind })}><Icon name="edit" size={13} /></button>
                       <button className="section-action section-delete" type="button" aria-label={`Excluir ${section.title}`} onClick={() => handleDeleteSection(section)}><Icon name="trash" size={13} /></button>
@@ -2744,12 +2775,13 @@ function App() {
                     <HostPicker hosts={availableForSection(section)} onAdd={(name) => handleAddCard(section, name)} />
                   </div>
                 )}
+                <>
                 {isUpsSection ? (
                   sectionCards.length ? (
                     <div className="ups-grid section-ups-grid">
                       {sectionCards.map((ups) => <UpsCard key={ups.host_name} ups={ups} />)}
                     </div>
-                  ) : <EmptyState title={cardEmptyTitle} detail={cardEmptyDetail} />
+                  ) : sectionWidgets.length ? null : <EmptyState title={cardEmptyTitle} detail={cardEmptyDetail} />
                 ) : isConsumptionSection ? (
                   sectionWidgets.length ? (
                     <div className="custom-widget-grid consumption-widget-grid">
@@ -2763,7 +2795,11 @@ function App() {
                             {isAdministrator && <><span className="widget-control-divider" /><button type="button" className="widget-remove-button" onClick={() => setConfirmation({
                               title: 'Excluir indicador?',
                               message: `O indicador "${widget.title}" será removido deste painel. Esta ação não pode ser desfeita.`,
-                              onConfirm: () => setLayout((current) => ({ ...current, widgets: current.widgets.filter((item) => item.id !== widget.id) })),
+                              onConfirm: () => setLayout((current) => ({
+                                ...current,
+                                widgets: current.widgets.filter((item) => item.id !== widget.id),
+                                connections: (current.connections || []).filter((connection) => connection.source !== widget.id && connection.target !== widget.id),
+                              })),
                             })} aria-label={`Remover ${widget.title}`} title="Remover"><Icon name="close" size={13} /></button></>}
                           </div>}
                           {isAdministrator && <button className="widget-resize-handle" type="button" onPointerDown={(event) => resizeWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
@@ -2790,8 +2826,27 @@ function App() {
                     ))}
                   </div>
                 ) : (
-                  <EmptyState title={cardEmptyTitle} detail={cardEmptyDetail} />
+                  sectionWidgets.length ? null : <EmptyState title={cardEmptyTitle} detail={cardEmptyDetail} />
                 )}
+                {!isConsumptionSection && sectionWidgets.length > 0 && (
+                  <div className="custom-widget-grid section-camera-grid">
+                    {sectionWidgets.map((widget) => (
+                      <div className={`custom-widget-wrap widget-width-${widget.width || 2}`} style={{ '--widget-height': widget.height || 3 }} key={widget.id}>
+                        <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} upsDevices={dashboard.ups} />
+                        {canEditDashboard && <div className="widget-controls" role="group" aria-label={`Controles de ${widget.title}`}>
+                          {isAdministrator && <><button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button><span className="widget-control-divider" /></>}
+                          {isAdministrator && <>
+                            <button type="button" onClick={() => resizeWidget(widget.id, -1)} disabled={(widget.width || 2) <= 1} aria-label={`Reduzir tamanho de ${widget.title}`} title="Diminuir tamanho">−</button>
+                            <button type="button" onClick={() => resizeWidget(widget.id, 1)} disabled={(widget.width || 2) >= 4} aria-label={`Aumentar tamanho de ${widget.title}`} title="Aumentar tamanho">+</button>
+                            <button type="button" className="widget-remove-button" onClick={() => removeWidget(widget)} aria-label={`Remover ${widget.title}`} title="Remover"><Icon name="close" size={13} /></button>
+                          </>}
+                        </div>}
+                        {isAdministrator && <button className="widget-resize-handle" type="button" onPointerDown={(event) => resizeWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                </>
               </section>
             )
           })}
@@ -2828,7 +2883,16 @@ function App() {
       )}
       {sectionDialog && <SectionDialog dialog={sectionDialog} onClose={() => setSectionDialog(null)} onSave={handleSaveSection} />}
       {dashboardCreateOpen && <DashboardCreateDialog onClose={() => setDashboardCreateOpen(false)} onCreate={createDashboard} />}
-      {widgetDialog && <WidgetDialog onClose={() => setWidgetDialog(null)} onSave={saveWidget} widget={widgetDialog.id ? widgetDialog : null} sectionId={widgetDialog.sectionId} dashboardType={layout.type || 'general'} upsDevices={dashboard.ups} />}
+      {widgetDialog && <WidgetDialog
+        onClose={() => setWidgetDialog(null)}
+        onSave={saveWidget}
+        widget={widgetDialog.id ? widgetDialog : null}
+        sectionId={widgetDialog.sectionId}
+        sectionKind={widgetDialog.sectionKind || layout.sections.find((section) => section.id === widgetDialog.sectionId)?.kind}
+        sections={layout.sections}
+        dashboardType={layout.type || 'general'}
+        upsDevices={dashboard.ups}
+      />}
       {confirmation && <ConfirmDialog title={confirmation.title} message={confirmation.message} confirmLabel={confirmation.confirmLabel} onCancel={() => setConfirmation(null)} onConfirm={() => {
         const action = confirmation.onConfirm
         setConfirmation(null)

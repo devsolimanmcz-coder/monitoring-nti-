@@ -8,12 +8,15 @@
     "dev:api": "node --watch server/index.js",
     "dev:web": "vite --host",
     "start": "node server/index.js",
+    "db:migrate": "node server/db-migrate.js",
+    "create-admin": "node server/create-admin.js",
     "test": "node --test server/*.test.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@xyflow/react": "^12.12.0",
     "chart.js": "^4.5.1",
     "concurrently": "^10.0.6",
     "dotenv": "^18.0.8",

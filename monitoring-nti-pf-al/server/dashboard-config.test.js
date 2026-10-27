@@ -181,6 +181,58 @@ test('persists consumption sections and their monthly chart widgets', async () =
   assert.equal(saved.dashboards[0].widgets[0].range, '30d')
 })
 
+test('allows cameras to be placed in any dashboard section', async () => {
+  const config = configWithWidget({
+    type: 'camera',
+    cameraUrl: 'https://camera.example/live.mjpg',
+    sectionId: 'network-cameras',
+  })
+  config.dashboards[0].sections = [{
+    id: 'network-cameras',
+    title: 'Câmeras da rede',
+    kind: 'icmp',
+  }]
+
+  const saved = await saveDashboardConfig(config)
+
+  assert.equal(saved.dashboards[0].widgets[0].type, 'camera')
+  assert.equal(saved.dashboards[0].widgets[0].sectionId, 'network-cameras')
+})
+
+test('persists topology connections and rejects references to missing widgets', async () => {
+  const config = structuredClone(DEFAULT_DASHBOARD_CONFIG)
+  config.dashboards[0].type = 'topology'
+  config.dashboards[0].widgets = ['router-node', 'switch-node'].map((id) => ({
+    ...configWithWidget({ id }).dashboards[0].widgets[0],
+    type: 'availability',
+  }))
+  config.dashboards[0].connections = [{
+    id: 'router-switch-link',
+    source: 'router-node',
+    target: 'switch-node',
+  }]
+
+  const saved = await saveDashboardConfig(config)
+  assert.deepEqual(saved.dashboards[0].connections, config.dashboards[0].connections)
+
+  config.dashboards[0].connections[0].target = 'missing-node'
+  await assert.rejects(saveDashboardConfig(config), /Conexão inválida no mapa/)
+})
+
+test('rejects topology connections on dashboards that are not maps', async () => {
+  const config = structuredClone(DEFAULT_DASHBOARD_CONFIG)
+  config.dashboards[0].widgets = ['router', 'switch'].map((id) => ({
+    ...configWithWidget({ id }).dashboards[0].widgets[0],
+  }))
+  config.dashboards[0].connections = [{
+    id: 'link-1',
+    source: 'router',
+    target: 'switch',
+  }]
+
+  await assert.rejects(saveDashboardConfig(config), /só podem ser salvas em painéis do tipo Mapa/)
+})
+
 test('persists UPS sections with their monitored hosts', async () => {
   const config = structuredClone(DEFAULT_DASHBOARD_CONFIG)
   config.dashboards[0].sections = [{
