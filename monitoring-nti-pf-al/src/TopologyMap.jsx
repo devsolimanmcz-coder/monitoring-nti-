@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   addEdge,
   Background,
@@ -57,9 +57,17 @@ export default function TopologyMap({
 }) {
   const mapRef = useRef(null)
   const flowRef = useRef(null)
+  const previousGeometryRef = useRef(null)
   const [selectedNodeIds, setSelectedNodeIds] = useState([])
   const [selectedEdgeIds, setSelectedEdgeIds] = useState([])
   const [positionOverrides, setPositionOverrides] = useState({})
+  const geometryKey = JSON.stringify(initialNodes.map(({ id, position, style }) => [
+    id,
+    position.x,
+    position.y,
+    style?.width,
+    style?.height,
+  ]))
   const nodes = useMemo(() => initialNodes.map((node) => {
     const override = positionOverrides[node.id]
     const canKeepLocalPosition = override
@@ -95,6 +103,26 @@ export default function TopologyMap({
     }
   }), [connectionTraffic, connections, editable, selectedEdgeIds])
 
+  const fitViewIfNodesAreOutsideMap = useCallback(() => {
+    const mapElement = mapRef.current
+    const flow = flowRef.current
+    if (!mapElement || !flow) return
+
+    const { x, y, zoom } = flow.getViewport()
+    const hasNodeOutsideMap = flow.getNodes().some((node) => {
+      const width = (node.measured?.width ?? node.width ?? 0) * zoom
+      const height = (node.measured?.height ?? node.height ?? 0) * zoom
+      const left = node.position.x * zoom + x
+      const top = node.position.y * zoom + y
+      return left < 0
+        || top < 0
+        || left + width > mapElement.clientWidth
+        || top + height > mapElement.clientHeight
+    })
+
+    if (hasNodeOutsideMap) flow.fitView({ padding: 0.18, maxZoom: 1 })
+  }, [])
+
   const handleNodesChange = useCallback((changes) => {
     const positionChanges = changes.filter((change) => change.type === 'position' && change.position)
     if (positionChanges.length) {
@@ -123,24 +151,6 @@ export default function TopologyMap({
 
   const handleNodeDragStop = useCallback((_event, node) => {
     onNodeMove(node.id, node.position)
-    const mapElement = mapRef.current
-    const flow = flowRef.current
-    if (!mapElement || !flow) return
-
-    const { x, y, zoom } = flow.getViewport()
-    const width = (node.measured?.width ?? node.width ?? 0) * zoom
-    const height = (node.measured?.height ?? node.height ?? 0) * zoom
-    const left = node.position.x * zoom + x
-    const top = node.position.y * zoom + y
-    const isOutsideMap = left < 0
-      || top < 0
-      || left + width > mapElement.clientWidth
-      || top + height > mapElement.clientHeight
-    if (isOutsideMap) {
-      window.requestAnimationFrame(() => {
-        flowRef.current?.fitView({ padding: 0.18, maxZoom: 1 })
-      })
-    }
   }, [onNodeMove])
 
   const handleEdgesChange = useCallback((changes) => {
@@ -180,6 +190,15 @@ export default function TopologyMap({
     style: { stroke: edgeColor, strokeWidth: 2, strokeDasharray: '7 5' },
     markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
   }), [editable])
+
+  useEffect(() => {
+    const previousGeometry = previousGeometryRef.current
+    previousGeometryRef.current = geometryKey
+    if (previousGeometry === null || previousGeometry === geometryKey) return undefined
+
+    const frame = window.requestAnimationFrame(fitViewIfNodesAreOutsideMap)
+    return () => window.cancelAnimationFrame(frame)
+  }, [fitViewIfNodesAreOutsideMap, geometryKey])
 
   return (
     <section ref={mapRef} className="topology-map" style={{ height }} aria-label="Mapa interativo de topologia de rede">

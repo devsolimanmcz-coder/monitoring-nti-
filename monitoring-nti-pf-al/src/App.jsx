@@ -989,6 +989,8 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId, secti
       mapSizePx,
       mapCols: widget?.mapCols || 4,
       mapRows: widget?.mapRows || 4,
+      mapX: widget?.mapX ?? null,
+      mapY: widget?.mapY ?? null,
       hostId: selected.hostId,
       hostName: selected.hostName,
       itemName: selected.itemName,
