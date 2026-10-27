@@ -71,8 +71,9 @@ export const DEFAULT_DASHBOARD_CONFIG = {
   conditions: {},
 }
 
-const allowedKinds = new Set(['icmp', 'servers', 'consumption', 'ups'])
+const allowedKinds = new Set(['icmp', 'servers', 'consumption', 'ups', 'topology'])
 const allowedWidgets = new Set(['metric', 'timeseries', 'availability', 'gauge', 'table', 'icmp', 'server', 'alerts', 'camera', 'ups'])
+const topologyDeviceKinds = new Set(['link', 'switch', 'router', 'vm', 'computer'])
 
 function normalizeWidgetGeometry(widget) {
   const mapSizePx = Number(widget.mapSizePx ?? 80)
@@ -234,13 +235,19 @@ function normalizeDashboard(dashboard) {
     if (items.length !== itemIds.length) throw new Error('Metadados inválidos para os itens do indicador.')
     const sectionId = typeof widget.sectionId === 'string' ? widget.sectionId : ''
     const section = sections.find((item) => item.id === sectionId)
-    if (widget.sectionId !== undefined && (!sectionId || section?.kind !== 'consumption')) {
+    const topologySectionWidget = section?.kind === 'topology'
+      && ['availability', 'timeseries'].includes(widget.type)
+    if (widget.sectionId !== undefined
+      && (!sectionId || (section?.kind !== 'consumption' && !topologySectionWidget))) {
       throw new Error('Indicadores só podem ser associados a seções de consumo válidas.')
     }
     return {
       id: widget.id.slice(0, 80),
       title: widget.title.trim(),
       type: widget.type,
+      ...(widget.type === 'availability' && (dashboard.type === 'topology' || topologySectionWidget)
+        ? { deviceKind: topologyDeviceKinds.has(widget.deviceKind) ? widget.deviceKind : 'computer' }
+        : {}),
       ...(sectionId ? { sectionId } : {}),
       range,
       itemId: Number(widget.itemId),
@@ -264,8 +271,15 @@ function normalizeDashboard(dashboard) {
   if (!Array.isArray(connectionsInput) || connectionsInput.length > 2000) {
     throw new Error('O mapa pode ter no máximo 2000 conexões.')
   }
-  if (connectionsInput.length && dashboardType !== 'topology') {
-    throw new Error('Conexões só podem ser salvas em painéis do tipo Mapa.')
+  if (connectionsInput.length && dashboardType !== 'topology' && !sections.some((section) => section.kind === 'topology')) {
+    throw new Error('Conexões só podem ser salvas em painéis do tipo Mapa ou em seções de Mapa.')
+  }
+  const widgetById = new Map(widgets.map((widget) => [widget.id, widget]))
+  const topologyAreaForWidget = (widget) => {
+    if (widget.sectionId) return sections.find((section) => section.id === widget.sectionId)?.kind === 'topology'
+      ? widget.sectionId
+      : null
+    return dashboardType === 'topology' ? '__root_map__' : null
   }
   const connections = connectionsInput.map((connection) => {
     const id = typeof connection?.id === 'string' ? connection.id.trim() : ''
@@ -278,9 +292,45 @@ function normalizeDashboard(dashboard) {
       || source === target) {
       throw new Error('Conexão inválida no mapa. Verifique os indicadores de origem e destino.')
     }
+    const sourceArea = topologyAreaForWidget(widgetById.get(source))
+    const targetArea = topologyAreaForWidget(widgetById.get(target))
+    if (!sourceArea || sourceArea !== targetArea) {
+      throw new Error('Os equipamentos de uma conexão devem pertencer à mesma área do mapa.')
+    }
     connectionIds.add(id)
     const label = typeof connection.label === 'string' ? connection.label.trim().slice(0, 80) : ''
-    return { id, source, target, ...(label ? { label } : {}) }
+    let trafficItem
+    if (connection.trafficItem !== undefined && connection.trafficItem !== null) {
+      const item = connection.trafficItem
+      const itemId = Number(item.itemId)
+      const hostId = Number(item.hostId)
+      const unit = typeof item.unit === 'string' ? item.unit.trim().replace(/\s+/g, '') : ''
+      const supportedUnit = ['bps', 'bit/s', 'bits/s', 'Bps', 'B/s', 'byte/s', 'bytes/s', 'B', 'byte', 'bytes']
+        .includes(unit)
+      if (!Number.isSafeInteger(itemId) || itemId <= 0
+        || !Number.isSafeInteger(hostId) || hostId <= 0
+        || typeof item.hostName !== 'string' || !item.hostName.trim() || item.hostName.length > 255
+        || typeof item.itemName !== 'string' || !item.itemName.trim() || item.itemName.length > 255
+        || (item.key !== undefined && (typeof item.key !== 'string' || item.key.length > 255))
+        || !supportedUnit) {
+        throw new Error('Métrica de tráfego inválida. Selecione um item numérico em bits/s, bytes/s ou um contador de bytes.')
+      }
+      trafficItem = {
+        itemId,
+        hostId,
+        hostName: item.hostName.trim(),
+        itemName: item.itemName.trim(),
+        key: typeof item.key === 'string' ? item.key : '',
+        unit,
+      }
+    }
+    return {
+      id,
+      source,
+      target,
+      ...(label ? { label } : {}),
+      ...(trafficItem ? { trafficItem } : {}),
+    }
   })
   const normalizeNames = (items, field) => {
     if (!Array.isArray(items)) throw new Error(`Campo ${field} inválido.`)

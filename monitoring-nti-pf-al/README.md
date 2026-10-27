@@ -145,14 +145,25 @@ mesma unidade. A queda fica vermelha; a recuperação aparece como
 estado em cinco minutos são indicadas como **OSCILANDO** em amarelo. Amostras
 ausentes por mais de três minutos aparecem como **SEM DADOS**.
 
-O tipo **Mapa** também começa vazio e usa React Flow para montar a topologia:
+Crie quantos painéis do tipo **Mapa** precisar; cada mapa mantém seus próprios
+equipamentos, ícones, enlaces, métricas e posições. O tipo **Mapa** começa vazio
+e usa React Flow para montar a topologia:
 arraste os hosts, gráficos e câmeras para posicionar, conecte os equipamentos
 pelas alças para criar enlaces direcionais animados e navegue com zoom, controles
 e minimapa. As conexões e posições são salvas por painel. Os nós de host mostram
-um ícone de equipamento e o estado de disponibilidade; gráficos podem combinar
+ícones configuráveis de link, switch, roteador, VM ou computador e o estado de
+disponibilidade; gráficos podem combinar
 até oito séries da mesma unidade e oferecem períodos de 15 minutos a 30 dias,
 escala vertical automática e rótulos de horário. Ative **Editar painel** para
 mover blocos e criar ou remover conexões.
+Em qualquer painel, também é possível criar seções do tipo **Mapa de topologia**;
+cada seção tem seu próprio canvas, equipamentos e conexões, sem misturar enlaces
+com outros mapas do mesmo painel.
+Para exibir o tráfego de um enlace, selecione a conexão no modo de edição e
+configure um item numérico de interface do Zabbix (taxas em bits/s ou bytes/s,
+ou um contador de bytes). O mapa consulta o histórico recente e apresenta o
+tráfego convertido para Mbps; contadores são calculados pela variação entre as
+coletas. A leitura é atualizada conforme o intervalo de atualização do painel.
 
 A configuração dos painéis, as contas e as sessões ficam no banco próprio
 `monitoring_nti`, separado do banco de métricas do Zabbix. Senhas continuam

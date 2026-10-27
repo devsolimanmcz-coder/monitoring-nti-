@@ -525,6 +525,13 @@
 .consumption-add-button { min-height: 29px; padding: 0 9px; }
 .topology-map { position: relative; display: block; width: 100%; min-width: 0; margin: 18px 0 25px; box-sizing: border-box; overflow: hidden; background: radial-gradient(ellipse at 50% 0,rgba(26,68,99,.24),transparent 65%),#0a111c; border: 1px solid rgba(89,157,196,.2); border-radius: 14px; box-shadow: inset 0 0 42px rgba(27,95,129,.08),0 14px 40px rgba(0,0,0,.2); }
 .topology-map-hint { margin: 15px 0 -7px; color: #8db4cc; font-size: 10px; }
+.topology-connection-toolbar { display: flex; align-items: center; gap: 9px; padding: 8px 10px; color: #b6d2e3; background: rgba(8,17,29,.96); border: 1px solid rgba(56,214,255,.28); border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,.32); font-size: 10px; }
+.topology-connection-toolbar > span { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topology-connection-toolbar .edit-panel-button { min-height: 28px; padding: 0 9px; white-space: nowrap; }
+.connection-traffic-dialog { max-width: 520px; }
+.connection-traffic-dialog > .dialog-hint { margin: 0; }
+.connection-traffic-remove { margin-right: auto; color: #e6a3a9; border-color: rgba(255,111,125,.3); }
+.connection-traffic-remove:hover { color: #ffc0c5; background: rgba(255,111,125,.08); }
 .topology-map .react-flow { background: transparent; }
 .topology-map .react-flow__pane { cursor: grab; }
 .topology-map .react-flow__pane:active { cursor: grabbing; }
@@ -561,6 +568,9 @@
 .topology-widget.availability-widget { display: grid; width: var(--map-size,80px); height: var(--map-size,80px); min-height: 0; place-items: center; padding: 0; overflow: visible; background: transparent; border: 0; }
 .topology-host-node { display: grid; width: 100%; min-width: 0; justify-items: center; gap: 3px; text-align: center; }
 .topology-host-icon { display: grid; width: 42px; height: 42px; place-items: center; color: #07120b; background: #8ee91a; border: 1px solid rgba(190,255,93,.45); border-radius: 8px; box-shadow: 0 0 16px rgba(142,233,26,.16); transition: transform .16s ease, box-shadow .16s ease; }
+.topology-device-glyph { width: 27px; height: 27px; filter: drop-shadow(0 1px 3px rgba(0,0,0,.2)); }
+.topology-device-link { width: 30px; height: 30px; }
+.topology-device-vm { width: 29px; height: 29px; }
 .topology-host-node strong { display: block; width: 100%; overflow: hidden; color: #dce7f4; font-size: 8px; font-weight: 650; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
 .topology-host-node small { overflow: hidden; max-width: 100%; color: #76db76; font-size: 7px; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
 .availability-down .topology-host-icon { color: #210b0b; background: #ff593f; border-color: rgba(255,132,106,.55); box-shadow: 0 0 16px rgba(255,89,63,.17); }

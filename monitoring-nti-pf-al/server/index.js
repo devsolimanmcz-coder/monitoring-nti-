@@ -122,7 +122,10 @@ async function userCanReadHistoryItems(user, itemIds) {
   const config = await readDashboardConfig()
   const permittedIds = new Set(config.dashboards
     .filter((dashboard) => user.dashboardIds.includes(dashboard.id))
-    .flatMap((dashboard) => dashboard.widgets.flatMap((widget) => widget.itemIds || [widget.itemId]))
+    .flatMap((dashboard) => [
+      ...dashboard.widgets.flatMap((widget) => widget.itemIds || [widget.itemId]),
+      ...dashboard.connections.map((connection) => connection.trafficItem?.itemId),
+    ])
     .map(Number))
   return itemIds.every((itemId) => permittedIds.has(itemId))
 }

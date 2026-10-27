@@ -247,10 +247,111 @@ test('persists UPS sections with their monitored hosts', async () => {
   assert.deepEqual(saved.dashboards[0].widgets, [])
 })
 
+test('allows topology sections with their own map nodes and connections', async () => {
+  const config = configWithWidget({ id: 'section-router', sectionId: 'core-map', type: 'availability', deviceKind: 'router' })
+  const dashboard = config.dashboards[0]
+  dashboard.sections = [{ id: 'core-map', title: 'Mapa do núcleo', kind: 'topology' }]
+  dashboard.widgets.push({
+    ...configWithWidget({ id: 'section-switch', sectionId: 'core-map', type: 'availability', deviceKind: 'switch' }).dashboards[0].widgets[0],
+  })
+  dashboard.connections = [{ id: 'core-link', source: 'section-router', target: 'section-switch' }]
+
+  const saved = await saveDashboardConfig(config)
+
+  assert.deepEqual(saved.dashboards[0].sections, dashboard.sections)
+  assert.equal(saved.dashboards[0].widgets[0].deviceKind, 'router')
+  assert.deepEqual(saved.dashboards[0].connections, dashboard.connections)
+})
+
+test('rejects links crossing between independent topology areas', async () => {
+  const config = configWithWidget({ id: 'root-router', type: 'availability' })
+  const dashboard = config.dashboards[0]
+  dashboard.type = 'topology'
+  dashboard.sections = [{ id: 'access-map', title: 'Mapa de acesso', kind: 'topology' }]
+  dashboard.widgets.push({
+    ...configWithWidget({ id: 'section-switch', sectionId: 'access-map', type: 'availability' }).dashboards[0].widgets[0],
+  })
+  dashboard.connections = [{ id: 'cross-map-link', source: 'root-router', target: 'section-switch' }]
+
+  await assert.rejects(saveDashboardConfig(config), /mesma área do mapa/)
+})
+
 test('accepts the three-hour history range for chart widgets', async () => {
   const saved = await saveDashboardConfig(configWithWidget({ range: '3h' }))
 
   assert.equal(saved.dashboards[0].widgets[0].range, '3h')
+})
+
+test('persists Zabbix traffic metrics on topology connections', async () => {
+  const config = configWithWidget({ id: 'router-node' })
+  const dashboard = config.dashboards[0]
+  dashboard.type = 'topology'
+  dashboard.widgets.push({ ...dashboard.widgets[0], id: 'switch-node', title: 'Switch' })
+  dashboard.connections = [{
+    id: 'router-switch',
+    source: 'router-node',
+    target: 'switch-node',
+    trafficItem: {
+      itemId: 789,
+      hostId: 456,
+      hostName: 'Roteador',
+      itemName: 'Tráfego recebido',
+      key: 'net.if.in[eth0]',
+      unit: 'Bps',
+    },
+  }]
+
+  const saved = await saveDashboardConfig(config)
+
+  assert.deepEqual(saved.dashboards[0].connections[0].trafficItem, dashboard.connections[0].trafficItem)
+})
+
+test('persists multiple independent topology dashboards and their device icons', async () => {
+  const first = configWithWidget({ id: 'router-node', type: 'availability', deviceKind: 'router' })
+  first.dashboards[0].type = 'topology'
+  first.dashboards[0].title = 'Mapa do núcleo'
+  first.dashboards[0].widgets[0].items = [{
+    itemId: 123,
+    hostId: 456,
+    hostName: 'Núcleo',
+    itemName: 'Ping',
+    key: 'icmpping',
+    unit: '',
+  }]
+  const second = structuredClone(first.dashboards[0])
+  second.id = 'access-map'
+  second.title = 'Mapa de acesso'
+  second.widgets = second.widgets.map((widget) => ({ ...widget, id: 'switch-node', deviceKind: 'switch' }))
+  const config = structuredClone(DEFAULT_DASHBOARD_CONFIG)
+  config.dashboards = [first.dashboards[0], second]
+
+  const saved = await saveDashboardConfig(config)
+
+  assert.equal(saved.dashboards.length, 2)
+  assert.equal(saved.dashboards[0].widgets[0].deviceKind, 'router')
+  assert.equal(saved.dashboards[1].widgets[0].deviceKind, 'switch')
+})
+
+test('rejects unsupported units for topology traffic metrics', async () => {
+  const config = configWithWidget({ id: 'router-node' })
+  const dashboard = config.dashboards[0]
+  dashboard.type = 'topology'
+  dashboard.widgets.push({ ...dashboard.widgets[0], id: 'switch-node', title: 'Switch' })
+  dashboard.connections = [{
+    id: 'router-switch',
+    source: 'router-node',
+    target: 'switch-node',
+    trafficItem: {
+      itemId: 789,
+      hostId: 456,
+      hostName: 'Roteador',
+      itemName: 'CPU',
+      key: 'system.cpu.util',
+      unit: '%',
+    },
+  }]
+
+  await assert.rejects(saveDashboardConfig(config), /bits\/s, bytes\/s ou um contador de bytes/)
 })
 
 test('persists a camera widget without requiring a Zabbix item', async () => {

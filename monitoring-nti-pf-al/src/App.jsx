@@ -11,6 +11,7 @@ import {
 import { Line } from 'react-chartjs-2'
 import { capacityInDisplayUnit } from './capacity-format.js'
 import { normalizeApiError, parseApiResponse } from './api-response.js'
+import { connectionTrafficMbps, isSupportedTrafficUnit } from './connection-traffic.js'
 import { formatMetricSeriesGroups } from './metric-format.js'
 import { getAvailabilityStatus } from './widget-status.js'
 import './App.css'
@@ -191,6 +192,26 @@ function Icon({ name, size = 18, ...props }) {
       {paths[name]}
     </svg>
   )
+}
+
+const topologyDeviceLabels = {
+  link: 'LINK',
+  switch: 'SWITCH',
+  router: 'ROTEADOR',
+  vm: 'MÁQUINA VIRTUAL',
+  computer: 'COMPUTADOR',
+}
+
+function TopologyDeviceIcon({ kind }) {
+  const paths = {
+    link: <><path d="M10 13.5 8.5 15a4 4 0 0 1-5.7-5.7l3-3a4 4 0 0 1 5.7 0" /><path d="m14 10.5 1.5-1.5a4 4 0 0 1 5.7 5.7l-3 3a4 4 0 0 1-5.7 0" /><path d="m8.5 15 7-7" /></>,
+    switch: <><rect x="3" y="5" width="18" height="14" rx="3" /><path d="m8 10-2 2 2 2m4-4 2 2-2 2m4-4 2 2-2 2" /></>,
+    router: <><path d="M5 10h14a3 3 0 0 1 3 3v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a3 3 0 0 1 3-3Z" /><path d="M12 10V4m-3 3a4 4 0 0 1 6 0m-9-3a8 8 0 0 1 12 0M7 15h.01M11 15h.01M16 15h1" /></>,
+    vm: <><rect x="6" y="3" width="15" height="13" rx="2" /><path d="M3 8v11a2 2 0 0 0 2 2h13M10 7h7m-7 4h7m-7 4h4" /><path d="M9 19v2m6-2v2" /></>,
+    computer: <><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /><circle cx="12" cy="10.5" r="2.5" /><path d="M12 9v1.7l1.2.7" /></>,
+  }
+  const safeKind = Object.hasOwn(paths, kind) ? kind : 'computer'
+  return <svg className={`topology-device-glyph topology-device-${safeKind}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[safeKind]}</svg>
 }
 
 function formatNumber(value, digits = 1) {
@@ -480,12 +501,13 @@ function SectionDialog({ dialog, onClose, onSave }) {
         </div>
         <label className="dialog-field"><span>Nome da seção</span><input autoFocus maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex.: INFRAESTRUTURA - ATIVOS DE REDE" required /></label>
         {dialog.mode === 'create' && !dialog.fixedKind && (
-          <label className="dialog-field"><span>Tipo de cards</span>
+          <label className="dialog-field"><span>Tipo de seção</span>
             <select value={kind} onChange={(event) => setKind(event.target.value)}>
               <option value="icmp">Rede e aplicações (ICMP)</option>
               <option value="servers">Servidores (CPU, RAM e discos)</option>
               <option value="consumption">Consumo de dados e tráfego</option>
               <option value="ups">Nobreaks (energia e autonomia)</option>
+              <option value="topology">Mapa de topologia</option>
             </select>
           </label>
         )}
@@ -647,9 +669,9 @@ function MetricWidget({ widget, data, upsDevices = [] }) {
       {status ? (
         widget.dashboardType === 'topology' ? (
           <div className="topology-host-node" role="status" aria-label={`${widget.hostName}: ${status.label}`} title={`${widget.hostName} · ${status.label}`}>
-            <span className="topology-host-icon"><Icon name="monitor" size={25} /></span>
+            <span className="topology-host-icon" title={topologyDeviceLabels[widget.deviceKind] || topologyDeviceLabels.computer}><TopologyDeviceIcon kind={widget.deviceKind} /></span>
             <strong title={widget.hostName}>{widget.hostName}</strong>
-            <small>{status.state === 'up' ? 'OK' : status.state === 'down' ? 'HOST INDISPONÍVEL' : status.label}</small>
+            <small>{topologyDeviceLabels[widget.deviceKind] || topologyDeviceLabels.computer} · {status.state === 'up' ? 'OK' : status.state === 'down' ? 'HOST INDISPONÍVEL' : status.label}</small>
           </div>
         ) : (
           <div className="availability-state" role="status" aria-label={`${widget.hostName}: ${status.label}`}>
@@ -683,9 +705,118 @@ function MetricWidget({ widget, data, upsDevices = [] }) {
   )
 }
 
+function ConnectionTrafficDialog({ connection, onClose, onSave }) {
+  const existingItem = connection.trafficItem || null
+  const [hosts, setHosts] = useState([])
+  const [catalog, setCatalog] = useState([])
+  const [hostId, setHostId] = useState(existingItem ? String(existingItem.hostId) : '')
+  const [itemId, setItemId] = useState(existingItem ? String(existingItem.itemId) : '')
+  const [search, setSearch] = useState(existingItem?.key || 'net.if')
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingHosts, setLoadingHosts] = useState(true)
+  const [loadingItems, setLoadingItems] = useState(false)
+  const [error, setError] = useState('')
+  const availableItems = [...new Map([
+    ...(existingItem ? [existingItem] : []),
+    ...catalog,
+  ].map((item) => [Number(item.itemId), item])).values()]
+  const trafficItems = availableItems.filter((item) => isSupportedTrafficUnit(item.unit))
+  const selectedItem = trafficItems.find((item) => String(item.itemId) === itemId)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/catalog/hosts', { signal: controller.signal })
+      .then(async (response) => {
+        const payload = await parseApiResponse(response)
+        if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar os equipamentos.')
+        setHosts(payload)
+      })
+      .catch((requestError) => {
+        if (requestError.name !== 'AbortError') {
+          console.error('Falha ao carregar equipamentos para o tráfego do enlace:', requestError)
+          setError(normalizeApiError(requestError, 'Não foi possível conectar à lista de equipamentos do Zabbix.'))
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingHosts(false)
+      })
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    if (!hostId) {
+      return undefined
+    }
+    const controller = new AbortController()
+    const timeout = window.setTimeout(async () => {
+      setLoadingItems(true)
+      setError('')
+      try {
+        const params = new URLSearchParams({ hostId, search, page: String(page) })
+        const response = await fetch(`/api/catalog?${params}`, { signal: controller.signal })
+        const payload = await parseApiResponse(response)
+        if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar as métricas do equipamento.')
+        setCatalog((current) => page === 0 ? payload : [...current, ...payload])
+        setHasMore(payload.length === 100)
+      } catch (requestError) {
+        if (requestError.name !== 'AbortError') {
+          console.error('Falha ao carregar métricas de tráfego do Zabbix:', requestError)
+          setError(normalizeApiError(requestError, 'Não foi possível conectar ao catálogo de itens do Zabbix.'))
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoadingItems(false)
+      }
+    }, 200)
+    return () => {
+      window.clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [hostId, page, search])
+
+  function submit(event) {
+    event.preventDefault()
+    if (!selectedItem) {
+      setError('Selecione um item numérico em bits/s, bytes/s ou um contador de bytes.')
+      return
+    }
+    onSave({
+      itemId: Number(selectedItem.itemId),
+      hostId: Number(selectedItem.hostId),
+      hostName: selectedItem.hostName,
+      itemName: selectedItem.itemName,
+      key: selectedItem.key,
+      unit: selectedItem.unit,
+    })
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <form className="section-dialog widget-dialog connection-traffic-dialog" role="dialog" aria-modal="true" aria-labelledby="connection-traffic-title" onSubmit={submit}>
+        <div className="dialog-heading"><div><span className="eyebrow">TRÁFEGO AO VIVO · ZABBIX</span><h2 id="connection-traffic-title">Configurar Mbps do enlace</h2></div><button className="dialog-close" type="button" aria-label="Fechar" onClick={onClose}><Icon name="close" size={17} /></button></div>
+        <p className="dialog-hint">Escolha o item da interface que mede entrada ou saída. Taxas em bytes/s e bits/s são convertidas para Mbps; contadores de bytes usam a variação entre as coletas.</p>
+        <label className="dialog-field"><span>Equipamento da interface</span><select autoFocus value={hostId} onChange={(event) => { setHostId(event.target.value); setItemId(''); setSearch('net.if'); setCatalog([]); setPage(0); setLoadingItems(false) }} required><option value="">{loadingHosts ? 'Carregando equipamentos...' : 'Selecione um equipamento...'}</option>{hosts.map((host) => <option key={host.hostId} value={host.hostId}>{host.hostName}</option>)}</select></label>
+        {hostId && <>
+          <label className="dialog-field"><span>Buscar item da interface</span><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); setCatalog([]) }} placeholder="net.if.in, tráfego recebido..." /></label>
+          <label className="dialog-field"><span>Métrica de tráfego</span><select value={itemId} onChange={(event) => setItemId(event.target.value)} required><option value="">{loadingItems ? 'Carregando métricas...' : 'Selecione uma métrica de tráfego...'}</option>{trafficItems.map((item) => <option key={item.itemId} value={item.itemId}>{item.itemName} · {item.unit} · {item.key}</option>)}</select></label>
+          {loadingItems && <span className="dialog-hint">Consultando itens numéricos do Zabbix...</span>}
+          {!loadingItems && trafficItems.length === 0 && <span className="dialog-hint">Nenhum item com unidade de taxa ou contador de bytes nesta página. Pesquise por net.if.in, net.if.out ou o nome da interface.</span>}
+          {hasMore && <button className="edit-panel-button" type="button" disabled={loadingItems} onClick={() => setPage((current) => current + 1)}>Carregar mais itens</button>}
+        </>}
+        {error && <p className="dialog-error" role="alert">{error}</p>}
+        <div className="dialog-actions">
+          {existingItem && <button className="dialog-cancel connection-traffic-remove" type="button" onClick={() => onSave(null)}>Remover medição</button>}
+          <button className="dialog-cancel" type="button" onClick={onClose}>Cancelar</button>
+          <button className="dialog-submit" type="submit" disabled={!selectedItem || loadingItems}>Salvar</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId, sectionKind, sections = [], upsDevices = [] }) {
   const initialType = widget?.type || (sectionId
-    ? sectionKind === 'consumption' ? 'timeseries' : 'camera'
+    ? sectionKind === 'consumption' ? 'timeseries' : sectionKind === 'topology' ? 'availability' : 'camera'
     : ['network', 'topology'].includes(dashboardType) ? 'availability' : 'timeseries')
   const [hosts, setHosts] = useState([])
   const [catalog, setCatalog] = useState([])
@@ -696,6 +827,7 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId, secti
   const [selectedItemIds, setSelectedItemIds] = useState(widget?.itemIds || (widget ? [widget.itemId] : []))
   const [range, setRange] = useState(widget?.range || '1h')
   const [mapSizePx, setMapSizePx] = useState(widget?.mapSizePx || 80)
+  const [deviceKind, setDeviceKind] = useState(widget?.deviceKind || 'computer')
   const [title, setTitle] = useState(widget?.title || '')
   const [type, setType] = useState(initialType)
   const [cameraUrl, setCameraUrl] = useState(widget?.cameraUrl || 'http://10.82.7.226/video.mjpg')
@@ -861,6 +993,7 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId, secti
       hostName: selected.hostName,
       itemName: selected.itemName,
       unit: selected.unit,
+      ...(type === 'availability' && (dashboardType === 'topology' || sectionKind === 'topology') ? { deviceKind } : {}),
       width: widget?.width || (type === 'timeseries' ? 2 : 1),
       height: widget?.height || (type === 'timeseries' ? 2 : 1),
     })
@@ -871,8 +1004,10 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId, secti
       <form className={`section-dialog widget-dialog ${type === 'timeseries' ? 'timeseries-dialog' : ''}`} role="dialog" aria-modal="true" aria-labelledby="widget-dialog-title" onSubmit={submit}>
         <div className="dialog-heading"><div><span className="eyebrow">{type === 'camera' ? 'TRANSMISSÃO AO VIVO' : type === 'ups' ? 'MONITORAMENTO DE ENERGIA' : 'MÉTRICAS NUMÉRICAS DO ZABBIX'}</span><h2 id="widget-dialog-title">{widget ? 'Configurar indicador' : 'Adicionar indicador'}</h2></div><button className="dialog-close" type="button" aria-label="Fechar" onClick={onClose}><Icon name="close" size={17} /></button></div>
         <label className="dialog-field widget-type-field"><span>Tipo de visualização</span><select value={type} onChange={(event) => { const nextType = event.target.value; setType(nextType); setError(''); if (nextType !== 'timeseries') { setSelectedItemIds((current) => current.slice(0, 1)); setItemId((current) => current || String(selectedItemIds[0] || '')) } }}>
-          {sectionId && sectionKind !== 'consumption'
+          {sectionId && !['consumption', 'topology'].includes(sectionKind)
             ? <option value="camera">Câmera ao vivo</option>
+            : sectionId && sectionKind === 'topology'
+              ? <><option value="availability">Host com estado UP / DOWN</option><option value="timeseries">Gráfico de métricas</option><option value="camera">Câmera ao vivo</option></>
             : ['network', 'topology'].includes(dashboardType)
               ? <><option value="availability">Host UP / DOWN</option><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="camera">Câmera ao vivo</option><option value="ups">Monitoramento de nobreak</option></>
               : <><option value="timeseries">Gráfico temporal (até 8 itens)</option><option value="metric">Valor atual</option><option value="camera">Câmera ao vivo</option><option value="ups">Monitoramento de nobreak</option></>}
@@ -887,7 +1022,10 @@ function WidgetDialog({ onClose, onSave, widget, dashboardType, sectionId, secti
         {error && <p className="dialog-error" role="alert">{error}</p>}
         {!['camera', 'ups'].includes(type) && hostId && <>
           {type === 'timeseries' && <label className="dialog-field widget-range-field"><span>Período do gráfico</span><select value={range} onChange={(event) => setRange(event.target.value)}><option value="15m">Últimos 15 minutos</option><option value="1h">Última hora</option><option value="3h">Últimas 3 horas</option><option value="6h">Últimas 6 horas</option><option value="24h">Último dia</option><option value="7d">Últimos 7 dias</option><option value="30d">Últimos 30 dias (mensal)</option></select></label>}
-          {type === 'availability' && dashboardType === 'topology' && <label className="dialog-field"><span>Tamanho do bloco (px)</span><input type="number" min="56" max="480" step="8" value={mapSizePx} onChange={(event) => setMapSizePx(Math.max(56, Math.min(480, Number(event.target.value) || 56)))} /><span className="dialog-hint">Largura e altura iguais. Padrão: 80 × 80 px.</span></label>}
+          {type === 'availability' && (dashboardType === 'topology' || sectionKind === 'topology') && <>
+            <label className="dialog-field"><span>Tipo de equipamento no mapa</span><select value={deviceKind} onChange={(event) => setDeviceKind(event.target.value)}><option value="link">Link</option><option value="switch">Switch</option><option value="router">Roteador</option><option value="vm">Máquina virtual (VM)</option><option value="computer">Computador</option></select><span className="dialog-hint">Escolha um ícone para identificar visualmente este equipamento.</span></label>
+            <label className="dialog-field"><span>Tamanho do bloco (px)</span><input type="number" min="56" max="480" step="8" value={mapSizePx} onChange={(event) => setMapSizePx(Math.max(56, Math.min(480, Number(event.target.value) || 56)))} /><span className="dialog-hint">Largura e altura iguais. Padrão: 80 × 80 px.</span></label>
+          </>}
           <label className="dialog-field widget-search-field"><span>Buscar item deste equipamento</span><input value={search} onChange={(event) => { setSearch(event.target.value); setItemPage(0); setHasMoreItems(false); setCatalog([]) }} placeholder={type === 'availability' ? 'icmpping, ping, status...' : 'CPU, memória, tráfego enviado/recebido...'} /></label>
           {type === 'timeseries' ? (
             <div className="dialog-field widget-items-field"><span>Itens do gráfico <small>{selectedItemIds.length} de 8 selecionados</small></span>
@@ -945,7 +1083,7 @@ function DashboardCreateDialog({ onClose, onCreate }) {
         <div className="dialog-heading"><div><span className="eyebrow">NOVO PAINEL</span><h2 id="new-dashboard-title">Criar painel</h2></div><button className="dialog-close" type="button" aria-label="Fechar" onClick={onClose}><Icon name="close" size={17} /></button></div>
         <label className="dialog-field"><span>Nome do painel</span><input autoFocus maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex.: Rede e conectividade" required /></label>
         <label className="dialog-field"><span>Tipo de painel</span><select value={type} onChange={(event) => setType(event.target.value)}><option value="general">Geral — indicadores e gráficos</option><option value="network">Rede — disponibilidade e tráfego</option><option value="topology">Mapa — hosts e gráficos organizáveis</option></select></label>
-        <p className="dialog-hint">{type === 'topology' ? 'Começa vazio: adicione hosts e gráficos, arraste para organizar em grade e use − / + para ajustar o tamanho dos blocos.' : type === 'network' ? 'O painel começará vazio. Adicione cards UP/DOWN e gráficos de uma ou mais interfaces.' : 'O painel começará vazio e aceitará indicadores de valor e gráficos.'}</p>
+        <p className="dialog-hint">{type === 'topology' ? 'Você pode criar vários mapas independentes. Cada um começa vazio e pode ter seus próprios equipamentos, ícones, enlaces e métricas.' : type === 'network' ? 'O painel começará vazio. Adicione cards UP/DOWN e gráficos de uma ou mais interfaces.' : 'O painel começará vazio e aceitará indicadores de valor e gráficos.'}</p>
         <div className="dialog-actions"><button className="dialog-cancel" type="button" onClick={onClose}>Cancelar</button><button className="dialog-submit" type="submit">Criar painel</button></div>
       </form>
     </div>
@@ -1222,6 +1360,7 @@ function App() {
   const [page, setPage] = useState('overview')
   const [sidebarHidden, setSidebarHidden] = useState(false)
   const [widgetDialog, setWidgetDialog] = useState(null)
+  const [connectionDialog, setConnectionDialog] = useState(null)
   const [dashboardCreateOpen, setDashboardCreateOpen] = useState(false)
   const [alertFilter, setAlertFilter] = useState('all')
   const [severityFilter, setSeverityFilter] = useState('all')
@@ -1266,20 +1405,37 @@ function App() {
   const widgetItemIdsKey = useMemo(
     () => {
       const metricWidgets = layout.widgets.filter((widget) => !['camera', 'ups'].includes(widget.type))
-      if (!metricWidgets.length) return ''
-      const ranges = [...new Set(metricWidgets.map((widget) => widget.range || '1h'))].sort()
+      const trafficConnections = layout.type === 'topology'
+        ? layout.connections.filter((connection) => connection.trafficItem?.itemId)
+        : []
+      const ranges = [...new Set([
+        ...metricWidgets.map((widget) => widget.range || '1h'),
+        ...(trafficConnections.length ? ['15m'] : []),
+      ])].sort()
+      if (!ranges.length) return ''
       return JSON.stringify(Object.fromEntries(ranges.map((range) => [
         range,
-        [...new Set(metricWidgets
+        [...new Set([
+          ...metricWidgets
           .filter((widget) => (widget.range || '1h') === range)
           .flatMap((widget) => widget.itemIds || [widget.itemId])
-          .map(Number))].sort((a, b) => a - b),
+          .map(Number),
+          ...(range === '15m' ? trafficConnections.map((connection) => Number(connection.trafficItem.itemId)) : []),
+        ])].sort((a, b) => a - b),
       ])))
     },
-    [layout.widgets],
+    [layout.connections, layout.type, layout.widgets],
   )
-  const mapPositions = useMemo(() => resolveMapPositions(layout.widgets.filter((widget) => !widget.sectionId)), [layout.widgets])
-  const mapCanvasHeight = Math.max(360, ...mapPositions.map((item) => item.mapY + item.height + 24))
+  const connectionTraffic = useMemo(() => Object.fromEntries(layout.connections
+    .filter((connection) => connection.trafficItem)
+    .map((connection) => {
+      const trafficItem = connection.trafficItem
+      const history = widgetHistories[`15m:${trafficItem.itemId}`]?.history
+      return [connection.id, {
+        value: connectionTrafficMbps(history?.points, history?.item?.unit || trafficItem.unit),
+        title: `${trafficItem.hostName} · ${trafficItem.itemName}`,
+      }]
+    })), [layout.connections, widgetHistories])
 
   const loadDashboard = useCallback(async (signal) => {
     if (!authUser) return
@@ -1867,7 +2023,9 @@ function App() {
   const handleDeleteSection = (section) => {
     setConfirmation({
       title: 'Excluir seção?',
-      message: `A seção "${section.title}" será removida. Os cards ou indicadores associados serão realocados para outra seção do mesmo tipo, se houver.`,
+      message: section.kind === 'topology'
+        ? `A seção "${section.title}" e os equipamentos e enlaces do mapa associados serão removidos. Esta ação não pode ser desfeita.`
+        : `A seção "${section.title}" será removida. Os cards ou indicadores associados serão realocados para outra seção do mesmo tipo, se houver.`,
       onConfirm: () => {
         const fallback = activeLayout.sections.find((candidate) => candidate.kind === section.kind && candidate.id !== section.id)
         setConfigError('')
@@ -1884,9 +2042,18 @@ function App() {
             assignments,
             widgets: current.widgets.map((widget) => {
               if (widget.sectionId !== section.id) return widget
+              if (section.kind === 'topology' && !fallback) return null
               if (fallback) return { ...widget, sectionId: fallback.id }
               return Object.fromEntries(Object.entries(widget).filter(([key]) => key !== 'sectionId'))
-            }),
+            }).filter(Boolean),
+            ...(section.kind === 'topology' && !fallback
+              ? { connections: (current.connections || []).filter((connection) => {
+                const widgetIds = new Set(current.widgets
+                  .filter((widget) => widget.sectionId === section.id)
+                  .map((widget) => widget.id))
+                return !widgetIds.has(connection.source) && !widgetIds.has(connection.target)
+              }) }
+              : {}),
           }
         })
       },
@@ -2333,7 +2500,7 @@ function App() {
           }
         } : undefined}
       >
-        <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} upsDevices={dashboard.ups} />
+        <MetricWidget widget={{ ...widget, dashboardType: isTopology ? 'topology' : layout.type }} data={widgetHistories} upsDevices={dashboard.ups} />
         {canEditDashboard && <div className={`widget-controls nodrag ${isAdministrator ? '' : 'moderator-controls'}`} role="group" aria-label={`Controles de ${widget.title}`}>
           {isAdministrator && <><button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button><span className="widget-control-divider" /></>}
           {!isTopology && <>
@@ -2349,6 +2516,66 @@ function App() {
         </div>}
         {isAdministrator && isTopology && widget.type !== 'availability' && <button className="widget-resize-handle nodrag" type="button" onPointerDown={(event) => resizeMapWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
         {isAdministrator && !isTopology && <button className="widget-resize-handle nodrag" type="button" onPointerDown={(event) => resizeWidgetByDrag(event, widget)} aria-label={`Arraste para redimensionar ${widget.title}`} title="Arraste para redimensionar"><Icon name="grip" size={14} /></button>}
+      </div>
+    )
+  }
+
+  const renderTopologyCanvas = (sectionId = null) => {
+    const mapWidgets = layout.widgets.filter((widget) => (
+      sectionId ? widget.sectionId === sectionId : !widget.sectionId
+    ))
+    const positions = resolveMapPositions(mapWidgets)
+    const widgetIds = new Set(mapWidgets.map((widget) => widget.id))
+    const connections = (layout.connections || []).filter((connection) => (
+      widgetIds.has(connection.source) && widgetIds.has(connection.target)
+    ))
+    const height = Math.max(360, ...positions.map((widget) => widget.mapY + widget.height + 24))
+
+    return (
+      <div className="topology-section-canvas">
+        {editMode && canEditDashboard && <p className="topology-map-hint">Clique em um bloco para editar o equipamento. Arraste para posicionar; crie enlaces arrastando de uma alça azul a outro equipamento.</p>}
+        <Suspense fallback={<div className="topology-map-loading" role="status">Carregando mapa interativo...</div>}>
+          <TopologyMap
+            nodes={positions.map((widget, index) => ({
+              id: widget.id,
+              type: 'topologyWidget',
+              position: { x: widget.mapX, y: widget.mapY },
+              style: { width: widget.width, height: widget.height },
+              data: {
+                editable: canEditDashboard && editMode,
+                isHost: widget.type === 'availability',
+                widget,
+                content: renderDashboardWidget(widget, index, true),
+              },
+            }))}
+            connections={connections}
+            connectionTraffic={connectionTraffic}
+            editable={canEditDashboard && editMode}
+            height={`${height}px`}
+            onNodeMove={(id, position) => setLayout((current) => ({
+              ...current,
+              widgets: current.widgets.map((widget) => widget.id === id
+                ? { ...widget, mapX: Math.max(0, Math.round(position.x)), mapY: Math.max(0, Math.round(position.y)) }
+                : widget),
+            }))}
+            onConfigureNode={configureWidget}
+            onConnectionsChange={(nextConnections) => setLayout((current) => ({
+              ...current,
+              connections: [
+                ...(current.connections || []).filter((connection) => (
+                  !connections.some((existing) => existing.id === connection.id)
+                )),
+                ...nextConnections,
+              ],
+            }))}
+            onConfigureConnection={setConnectionDialog}
+          />
+        </Suspense>
+        {!mapWidgets.length && <div className="topology-section-empty">
+          <span className="blank-dashboard-icon"><Icon name="network" size={23} /></span>
+          <div><strong>Mapa pronto para configurar</strong><span>Adicione equipamentos para desenhar a topologia desta seção.</span></div>
+          {editMode && canEditDashboard && <button className="edit-panel-button" type="button" onClick={() => setWidgetDialog({ sectionId, sectionKind: 'topology' })}><Icon name="plus" size={15} />Adicionar equipamento</button>}
+        </div>}
       </div>
     )
   }
@@ -2661,37 +2888,9 @@ function App() {
             </section>
           )}
 
-          {page === 'dashboard' && layout.type === 'topology' && editMode && canEditDashboard && (
-            <p className="topology-map-hint">Arraste os blocos para posicionar. Para criar um enlace, arraste de uma alça azul até outro equipamento; selecione uma linha e pressione Delete para removê-la.</p>
-          )}
-
           {page === 'dashboard' && layout.widgets.some((widget) => !widget.sectionId) && (
             layout.type === 'topology'
-              ? <Suspense fallback={<div className="topology-map-loading" role="status">Carregando mapa interativo...</div>}>
-                <TopologyMap
-                  nodes={mapPositions.map((widget, index) => ({
-                    id: widget.id,
-                    type: 'topologyWidget',
-                    position: { x: widget.mapX, y: widget.mapY },
-                    style: { width: widget.width, height: widget.height },
-                    data: {
-                      editable: canEditDashboard && editMode,
-                      isHost: widget.type === 'availability',
-                      content: renderDashboardWidget(widget, index, true),
-                    },
-                  }))}
-                  connections={layout.connections || []}
-                  editable={canEditDashboard && editMode}
-                  height={`${mapCanvasHeight}px`}
-                  onNodeMove={(id, position) => setLayout((current) => ({
-                    ...current,
-                    widgets: current.widgets.map((widget) => widget.id === id
-                      ? { ...widget, mapX: Math.max(0, Math.round(position.x)), mapY: Math.max(0, Math.round(position.y)) }
-                      : widget),
-                  }))}
-                  onConnectionsChange={(connections) => setLayout((current) => ({ ...current, connections }))}
-                />
-              </Suspense>
+              ? renderTopologyCanvas()
               : <section className="custom-widget-grid" aria-label="Indicadores personalizados">
                 {layout.widgets.filter((widget) => !widget.sectionId).map((widget, index) => renderDashboardWidget(widget, index))}
               </section>
@@ -2729,6 +2928,7 @@ function App() {
           ).map((section) => {
             const isConsumptionSection = page === 'dashboard' && section.kind === 'consumption'
             const isUpsSection = page === 'dashboard' && section.kind === 'ups'
+            const isTopologySection = ['dashboard', 'overview'].includes(page) && section.kind === 'topology'
             const sectionWidgets = layout.widgets.filter((widget) => widget.sectionId === section.id)
             const sectionCards = isUpsSection
               ? dashboard.ups.filter((ups) => ups.host_name.toLowerCase().includes(search.toLowerCase()))
@@ -2738,8 +2938,8 @@ function App() {
               : cardsForSection(section)
             const isIcmp = section.kind === 'icmp'
             const isVirtualServerSection = section.id === '__all_servers__'
-            const sectionIcon = isConsumptionSection ? 'activity' : isUpsSection ? 'battery' : isIcmp ? 'network' : 'server'
-            const sectionCountLabel = isConsumptionSection ? 'indicadores' : isUpsSection ? 'nobreaks' : isIcmp ? 'sistemas' : 'hosts'
+            const sectionIcon = isTopologySection ? 'network' : isConsumptionSection ? 'activity' : isUpsSection ? 'battery' : isIcmp ? 'network' : 'server'
+            const sectionCountLabel = isTopologySection ? 'equipamentos e indicadores' : isConsumptionSection ? 'indicadores' : isUpsSection ? 'nobreaks' : isIcmp ? 'sistemas' : 'hosts'
             const cardEmptyTitle = loading
               ? (isUpsSection ? 'Carregando nobreaks...' : isIcmp ? 'Conectando ao Zabbix...' : 'Carregando servidores...')
               : search
@@ -2757,26 +2957,28 @@ function App() {
               <section className="content-section" id={section.id} key={section.id}>
                 <div className="section-title-row">
                   <div className="section-title">
-                    <span className={`section-icon ${isConsumptionSection ? 'consumption-icon' : isIcmp ? 'network-icon' : 'server-icon'}`}><Icon name={sectionIcon} size={17} /></span>
-                    <div><h2>{section.title}</h2><p>{isConsumptionSection ? 'Tráfego, volume e consumo ao longo do tempo' : isUpsSection ? 'Bateria, carga, autonomia e alertas de energia' : isIcmp ? 'Disponibilidade, latência e perda de pacotes' : 'Uso de CPU, memória e armazenamento'}</p></div>
+                    <span className={`section-icon ${isTopologySection ? 'network-icon' : isConsumptionSection ? 'consumption-icon' : isIcmp ? 'network-icon' : 'server-icon'}`}><Icon name={sectionIcon} size={17} /></span>
+                    <div><h2>{section.title}</h2><p>{isTopologySection ? 'Topologia visual, equipamentos e enlaces de rede' : isConsumptionSection ? 'Tráfego, volume e consumo ao longo do tempo' : isUpsSection ? 'Bateria, carga, autonomia e alertas de energia' : isIcmp ? 'Disponibilidade, latência e perda de pacotes' : 'Uso de CPU, memória e armazenamento'}</p></div>
                   </div>
                   <div className="section-actions">
-                    <span className="section-counter">{isConsumptionSection ? sectionWidgets.length : sectionCards.length} {sectionCountLabel}{!isConsumptionSection && sectionWidgets.length ? ` · ${sectionWidgets.length} câmera(s)` : ''}</span>
-                    {editMode && canEditDashboard && <button className="edit-panel-button consumption-add-button" type="button" onClick={() => setWidgetDialog({ sectionId: section.id, sectionKind: section.kind })}><Icon name="plus" size={14} />{isConsumptionSection ? 'Adicionar indicador' : 'Adicionar câmera'}</button>}
+                    <span className="section-counter">{isConsumptionSection || isTopologySection ? sectionWidgets.length : sectionCards.length} {sectionCountLabel}{!isConsumptionSection && !isTopologySection && sectionWidgets.length ? ` · ${sectionWidgets.length} câmera(s)` : ''}</span>
+                    {editMode && canEditDashboard && <button className="edit-panel-button consumption-add-button" type="button" onClick={() => setWidgetDialog({ sectionId: section.id, sectionKind: section.kind })}><Icon name="plus" size={14} />{isConsumptionSection ? 'Adicionar indicador' : isTopologySection ? 'Adicionar equipamento' : 'Adicionar câmera'}</button>}
                     {editMode && isAdministrator && !isVirtualServerSection && !isUpsSection && <>
                       <button className="section-action" type="button" aria-label={`Renomear ${section.title}`} onClick={() => setSectionDialog({ mode: 'rename', id: section.id, title: section.title, kind: section.kind })}><Icon name="edit" size={13} /></button>
                       <button className="section-action section-delete" type="button" aria-label={`Excluir ${section.title}`} onClick={() => handleDeleteSection(section)}><Icon name="trash" size={13} /></button>
                     </>}
                   </div>
                 </div>
-                {editMode && !isVirtualServerSection && !isConsumptionSection && !isUpsSection && (
+                {editMode && !isVirtualServerSection && !isConsumptionSection && !isUpsSection && !isTopologySection && (
                   <div className="layout-toolbar">
                     <span><Icon name="grip" size={15} />Arraste para organizar; use a alça no canto do card para redimensionar</span>
                     <HostPicker hosts={availableForSection(section)} onAdd={(name) => handleAddCard(section, name)} />
                   </div>
                 )}
                 <>
-                {isUpsSection ? (
+                {isTopologySection ? (
+                  renderTopologyCanvas(section.id)
+                ) : isUpsSection ? (
                   sectionCards.length ? (
                     <div className="ups-grid section-ups-grid">
                       {sectionCards.map((ups) => <UpsCard key={ups.host_name} ups={ups} />)}
@@ -2828,7 +3030,7 @@ function App() {
                 ) : (
                   sectionWidgets.length ? null : <EmptyState title={cardEmptyTitle} detail={cardEmptyDetail} />
                 )}
-                {!isConsumptionSection && sectionWidgets.length > 0 && (
+                {!isConsumptionSection && !isTopologySection && sectionWidgets.length > 0 && (
                   <div className="custom-widget-grid section-camera-grid">
                     {sectionWidgets.map((widget) => (
                       <div className={`custom-widget-wrap widget-width-${widget.width || 2}`} style={{ '--widget-height': widget.height || 3 }} key={widget.id}>
@@ -2892,6 +3094,21 @@ function App() {
         sections={layout.sections}
         dashboardType={layout.type || 'general'}
         upsDevices={dashboard.ups}
+      />}
+      {connectionDialog && <ConnectionTrafficDialog
+        connection={connectionDialog}
+        onClose={() => setConnectionDialog(null)}
+        onSave={(trafficItem) => {
+          setLayout((current) => ({
+            ...current,
+            connections: current.connections.map((connection) => {
+              if (connection.id !== connectionDialog.id) return connection
+              if (trafficItem) return { ...connection, trafficItem }
+              return Object.fromEntries(Object.entries(connection).filter(([key]) => key !== 'trafficItem'))
+            }),
+          }))
+          setConnectionDialog(null)
+        }}
       />}
       {confirmation && <ConfirmDialog title={confirmation.title} message={confirmation.message} confirmLabel={confirmation.confirmLabel} onCancel={() => setConfirmation(null)} onConfirm={() => {
         const action = confirmation.onConfirm

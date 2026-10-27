@@ -6,6 +6,7 @@ import {
   Handle,
   MarkerType,
   MiniMap,
+  Panel,
   Position,
   ReactFlow,
 } from '@xyflow/react'
@@ -34,43 +35,76 @@ function TopologyWidgetNode({ data, selected }) {
 const nodeTypes = { topologyWidget: TopologyWidgetNode }
 
 function persistableEdges(edges) {
-  return edges.map(({ id, source, target, label }) => ({
+  return edges.map(({ id, source, target, label, trafficItem }) => ({
     id,
     source,
     target,
     ...(typeof label === 'string' && label ? { label } : {}),
+    ...(trafficItem ? { trafficItem } : {}),
   }))
 }
 
 export default function TopologyMap({
   nodes: initialNodes,
   connections,
+  connectionTraffic = {},
   editable,
   height,
   onNodeMove,
+  onConfigureNode,
   onConnectionsChange,
+  onConfigureConnection,
 }) {
   const [selectedNodeIds, setSelectedNodeIds] = useState([])
   const [selectedEdgeIds, setSelectedEdgeIds] = useState([])
-  const nodes = useMemo(() => initialNodes.map((node) => ({
-    ...node,
-    selected: selectedNodeIds.includes(node.id),
-  })), [initialNodes, selectedNodeIds])
-  const edges = useMemo(() => connections.map((connection) => ({
-    ...connection,
-    type: 'smoothstep',
-    animated: true,
-    deletable: editable,
-    selected: selectedEdgeIds.includes(connection.id),
-    style: { stroke: edgeColor, strokeWidth: 2, strokeDasharray: '7 5' },
-    markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
-  })), [connections, editable, selectedEdgeIds])
+  const [positionOverrides, setPositionOverrides] = useState({})
+  const nodes = useMemo(() => initialNodes.map((node) => {
+    const override = positionOverrides[node.id]
+    const canKeepLocalPosition = override
+      && override.base.x === node.position.x
+      && override.base.y === node.position.y
+    return {
+      ...node,
+      position: canKeepLocalPosition ? override.position : node.position,
+      selected: selectedNodeIds.includes(node.id),
+    }
+  }), [initialNodes, positionOverrides, selectedNodeIds])
+  const selectedEdge = connections.find((connection) => selectedEdgeIds.includes(connection.id))
+  const edges = useMemo(() => connections.map((connection) => {
+    const traffic = connectionTraffic[connection.id]
+    const label = traffic
+      ? `${traffic.value === null ? '—' : new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(traffic.value)} Mbps`
+      : connection.label
+    return {
+      ...connection,
+      label,
+      labelStyle: { fill: '#eaf7ff', fontSize: 12, fontWeight: 700 },
+      labelBgStyle: { fill: '#0b1724', fillOpacity: 0.94 },
+      labelBgPadding: [8, 4],
+      labelBgBorderRadius: 6,
+      labelShowBg: Boolean(label),
+      ariaLabel: traffic?.title || connection.label || 'Conexão de rede',
+      type: 'smoothstep',
+      animated: true,
+      deletable: editable,
+      selected: selectedEdgeIds.includes(connection.id),
+      style: { stroke: edgeColor, strokeWidth: 2, strokeDasharray: '7 5' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
+    }
+  }), [connectionTraffic, connections, editable, selectedEdgeIds])
 
   const handleNodesChange = useCallback((changes) => {
-    for (const change of changes) {
-      if (change.type === 'position' && change.position) {
-        onNodeMove(change.id, change.position)
-      }
+    const positionChanges = changes.filter((change) => change.type === 'position' && change.position)
+    if (positionChanges.length) {
+      const positionsById = new Map(initialNodes.map((node) => [node.id, node.position]))
+      setPositionOverrides((current) => {
+        const next = { ...current }
+        for (const change of positionChanges) {
+          const base = positionsById.get(change.id)
+          if (base) next[change.id] = { base, position: change.position }
+        }
+        return next
+      })
     }
     const selectionChanges = changes.filter((change) => change.type === 'select')
     if (selectionChanges.length) {
@@ -83,6 +117,10 @@ export default function TopologyMap({
         return [...selected]
       })
     }
+  }, [initialNodes])
+
+  const handleNodeDragStop = useCallback((_event, node) => {
+    onNodeMove(node.id, node.position)
   }, [onNodeMove])
 
   const handleEdgesChange = useCallback((changes) => {
@@ -106,7 +144,7 @@ export default function TopologyMap({
   const handleConnect = useCallback((connection) => {
     const nextEdges = addEdge({
       ...connection,
-      id: `${connection.source}-${connection.target}-${Date.now().toString(36)}`,
+      id: globalThis.crypto?.randomUUID?.() || `link-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
       type: 'smoothstep',
       animated: true,
       style: { stroke: edgeColor, strokeWidth: 2, strokeDasharray: '7 5' },
@@ -130,8 +168,16 @@ export default function TopologyMap({
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={handleNodesChange}
+        onNodeDragStop={handleNodeDragStop}
+        onNodeClick={(event, node) => {
+          if (!editable || !node.data.widget) return
+          if (event.target instanceof Element && event.target.closest('.widget-controls, .widget-resize-handle, .topology-flow-handle')) return
+          onConfigureNode(node.data.widget)
+        }}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
+        onEdgeClick={(_event, edge) => setSelectedEdgeIds([edge.id])}
+        onPaneClick={() => setSelectedEdgeIds([])}
         nodesDraggable={editable}
         nodesConnectable={editable}
         nodesDeletable={false}
@@ -146,6 +192,12 @@ export default function TopologyMap({
         panOnDrag
         zoomOnScroll
       >
+        {editable && selectedEdge && <Panel position="top-right" className="topology-connection-toolbar nodrag nopan">
+          <span>{connectionTraffic[selectedEdge.id]?.title || 'Enlace selecionado'}</span>
+          <button type="button" className="edit-panel-button" onClick={() => onConfigureConnection(selectedEdge)}>
+            {selectedEdge.trafficItem ? 'Configurar tráfego' : 'Configurar Mbps'}
+          </button>
+        </Panel>}
         <Background color="rgba(90, 160, 205, .18)" gap={24} size={1} />
         <MiniMap
           className="topology-minimap"
