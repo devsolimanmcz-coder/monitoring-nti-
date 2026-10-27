@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   addEdge,
   Background,
@@ -55,9 +55,12 @@ export default function TopologyMap({
   onConnectionsChange,
   onConfigureConnection,
 }) {
+  const mapRef = useRef(null)
+  const [mapWidth, setMapWidth] = useState(1104)
   const [selectedNodeIds, setSelectedNodeIds] = useState([])
   const [selectedEdgeIds, setSelectedEdgeIds] = useState([])
   const [positionOverrides, setPositionOverrides] = useState({})
+  const nodeExtent = useMemo(() => [[0, 0], [mapWidth, 1_000_000]], [mapWidth])
   const nodes = useMemo(() => initialNodes.map((node) => {
     const override = positionOverrides[node.id]
     const canKeepLocalPosition = override
@@ -161,8 +164,28 @@ export default function TopologyMap({
     markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
   }), [editable])
 
+  useEffect(() => {
+    const mapElement = mapRef.current
+    if (!mapElement) return undefined
+
+    const updateMapWidth = () => {
+      const nextWidth = Math.floor(mapElement.clientWidth)
+      setMapWidth((currentWidth) => currentWidth === nextWidth ? currentWidth : nextWidth)
+    }
+
+    updateMapWidth()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateMapWidth)
+      return () => window.removeEventListener('resize', updateMapWidth)
+    }
+
+    const observer = new ResizeObserver(updateMapWidth)
+    observer.observe(mapElement)
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <section className="topology-map" style={{ height }} aria-label="Mapa interativo de topologia de rede">
+    <section ref={mapRef} className="topology-map" style={{ height }} aria-label="Mapa interativo de topologia de rede">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -183,6 +206,7 @@ export default function TopologyMap({
         nodesDeletable={false}
         edgesDeletable={editable}
         elementsSelectable={editable}
+        nodeExtent={nodeExtent}
         deleteKeyCode={editable ? ['Backspace', 'Delete'] : null}
         defaultEdgeOptions={defaultEdgeOptions}
         fitView
