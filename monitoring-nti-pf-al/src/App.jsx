@@ -2533,7 +2533,7 @@ function App() {
 
     return (
       <div className="topology-section-canvas">
-        {editMode && canEditDashboard && <p className="topology-map-hint">Clique em um bloco para editar o equipamento. Arraste para posicionar; crie enlaces arrastando de uma alça azul a outro equipamento.</p>}
+        {editMode && canEditDashboard && <p className="topology-map-hint">Clique em um bloco para editar o equipamento. Arraste para posicionar; crie enlaces arrastando de uma alça azul a outro equipamento. Selecione um enlace para configurar o tráfego em Mbps.</p>}
         <Suspense fallback={<div className="topology-map-loading" role="status">Carregando mapa interativo...</div>}>
           <TopologyMap
             nodes={positions.map((widget, index) => ({
@@ -2574,7 +2574,6 @@ function App() {
         {!mapWidgets.length && <div className="topology-section-empty">
           <span className="blank-dashboard-icon"><Icon name="network" size={23} /></span>
           <div><strong>Mapa pronto para configurar</strong><span>Adicione equipamentos para desenhar a topologia desta seção.</span></div>
-          {editMode && canEditDashboard && <button className="edit-panel-button" type="button" onClick={() => setWidgetDialog({ sectionId, sectionKind: 'topology' })}><Icon name="plus" size={15} />Adicionar equipamento</button>}
         </div>}
       </div>
     )
@@ -2939,7 +2938,7 @@ function App() {
             const isIcmp = section.kind === 'icmp'
             const isVirtualServerSection = section.id === '__all_servers__'
             const sectionIcon = isTopologySection ? 'network' : isConsumptionSection ? 'activity' : isUpsSection ? 'battery' : isIcmp ? 'network' : 'server'
-            const sectionCountLabel = isTopologySection ? 'equipamentos e indicadores' : isConsumptionSection ? 'indicadores' : isUpsSection ? 'nobreaks' : isIcmp ? 'sistemas' : 'hosts'
+            const sectionCountLabel = isTopologySection ? 'itens no mapa' : isConsumptionSection ? 'indicadores' : isUpsSection ? 'nobreaks' : isIcmp ? 'sistemas' : 'hosts'
             const cardEmptyTitle = loading
               ? (isUpsSection ? 'Carregando nobreaks...' : isIcmp ? 'Conectando ao Zabbix...' : 'Carregando servidores...')
               : search
@@ -2954,7 +2953,7 @@ function App() {
                   : 'Ative a edição do painel e adicione ou mova cards para esta seção.'
 
             return (
-              <section className="content-section" id={section.id} key={section.id}>
+              <section className={`content-section${isTopologySection ? ' topology-content-section' : ''}`} id={section.id} key={section.id}>
                 <div className="section-title-row">
                   <div className="section-title">
                     <span className={`section-icon ${isTopologySection ? 'network-icon' : isConsumptionSection ? 'consumption-icon' : isIcmp ? 'network-icon' : 'server-icon'}`}><Icon name={sectionIcon} size={17} /></span>

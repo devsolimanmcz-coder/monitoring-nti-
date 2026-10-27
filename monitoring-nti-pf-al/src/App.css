@@ -142,6 +142,14 @@
 .section-title h2 { margin: 0; color: #e4eaf4; font: 600 20px/1.2 'Space Grotesk',sans-serif; letter-spacing: -.1px; }
 .section-title p { margin: 4px 0 0; color: #75839a; font-size: 16px; }
 .section-counter { padding: 5px 8px; color: #8c9bb0; background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 6px; font-size: 16px; white-space: nowrap; }
+.topology-content-section .section-title-row { align-items: stretch; flex-direction: column; gap: 12px; }
+.topology-content-section .section-title { align-items: flex-start; min-width: 0; }
+.topology-content-section .section-title > div { min-width: 0; }
+.topology-content-section .section-title h2 { overflow-wrap: anywhere; }
+.topology-content-section .section-title p { line-height: 1.5; }
+.topology-content-section .section-actions { box-sizing: border-box; width: 100%; min-height: 44px; flex-wrap: wrap; gap: 8px; padding: 7px 9px; background: rgba(255,255,255,.025); border: 1px solid var(--border); border-radius: 9px; }
+.topology-content-section .section-counter { margin-right: auto; font-size: 12px; }
+.topology-content-section .consumption-add-button { min-height: 30px; }
 
 .icmp-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); grid-auto-rows: 205px; gap: 11px; container-type: inline-size; }
 .grid-resizable-card { grid-column: span var(--card-width,1); grid-row: span var(--card-height,1); height: 100%; min-height: 0; box-sizing: border-box; }
@@ -367,6 +375,8 @@
   .page-heading { align-items: flex-start; }
   .heading-actions { align-items: flex-end; flex-direction: column; }
   .refresh-chip { margin-top: 0; }
+  .topology-content-section .section-actions { align-items: stretch; }
+  .topology-content-section .section-counter { flex: 1 0 100%; }
 }
 @media (max-width: 560px) {
   .topbar { padding-inline: 12px; }
@@ -525,6 +535,11 @@
 .consumption-add-button { min-height: 29px; padding: 0 9px; }
 .topology-map { position: relative; display: block; width: 100%; min-width: 0; margin: 18px 0 25px; box-sizing: border-box; overflow: hidden; background: radial-gradient(ellipse at 50% 0,rgba(26,68,99,.24),transparent 65%),#0a111c; border: 1px solid rgba(89,157,196,.2); border-radius: 14px; box-shadow: inset 0 0 42px rgba(27,95,129,.08),0 14px 40px rgba(0,0,0,.2); }
 .topology-map-hint { margin: 15px 0 -7px; color: #8db4cc; font-size: 10px; }
+.topology-section-canvas { position: relative; }
+.topology-section-empty { position: absolute; z-index: 3; inset: 18px 0 25px; display: grid; align-content: center; justify-items: center; gap: 12px; padding: 20px; box-sizing: border-box; color: #b7c8dc; background: rgba(7,14,23,.52); border-radius: 14px; text-align: center; pointer-events: none; }
+.topology-section-empty > div { display: grid; max-width: 520px; gap: 7px; }
+.topology-section-empty strong { font-size: 14px; }
+.topology-section-empty > div > span { color: #9aacc2; font-size: 12px; line-height: 1.6; }
 .topology-connection-toolbar { display: flex; align-items: center; gap: 9px; padding: 8px 10px; color: #b6d2e3; background: rgba(8,17,29,.96); border: 1px solid rgba(56,214,255,.28); border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,.32); font-size: 10px; }
 .topology-connection-toolbar > span { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topology-connection-toolbar .edit-panel-button { min-height: 28px; padding: 0 9px; white-space: nowrap; }
@@ -694,6 +709,20 @@
   .custom-widget-value { font-size: clamp(21px,1.35vw,34px); }
   .executive-metrics { grid-template-columns: repeat(4,minmax(0,1fr)); }
   .metric-card { min-height: clamp(110px,7vw,160px); padding: clamp(16px,1.1vw,24px); }
+}
+@media (min-width: 1600px) and (min-height: 850px) {
+  .kiosk-mode .dashboard-body { padding: clamp(30px,2.4vw,54px) clamp(40px,3vw,72px); }
+  .kiosk-mode .topology-content-section { margin-top: clamp(30px,2.2vw,46px); }
+  .kiosk-mode .topology-content-section .section-title h2 { font-size: clamp(25px,1.5vw,34px); }
+  .kiosk-mode .topology-content-section .section-title p { font-size: clamp(16px,.95vw,21px); }
+  .kiosk-mode .topology-content-section .section-actions { min-height: 54px; padding: 9px 12px; }
+  .kiosk-mode .topology-content-section .section-counter { font-size: clamp(14px,.85vw,19px); }
+  .kiosk-mode .topology-content-section .consumption-add-button { min-height: 38px; padding-inline: 15px; font-size: clamp(13px,.8vw,18px); }
+  .kiosk-mode .topology-content-section .section-action { width: 36px; height: 36px; }
+  .kiosk-mode .topology-map { min-height: clamp(640px,68vh,1050px); }
+  .kiosk-mode .topology-map-hint { font-size: clamp(13px,.8vw,18px); }
+  .kiosk-mode .topology-section-empty strong { font-size: clamp(19px,1.1vw,25px); }
+  .kiosk-mode .topology-section-empty > div > span { font-size: clamp(15px,.9vw,20px); }
 }
 @media (max-width: 1500px) {
   .custom-widget-wrap.widget-width-4 { grid-column: span 3; }
