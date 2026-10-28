@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   CategoryScale,
   Chart as ChartJS,
@@ -525,25 +526,42 @@ function SectionDialog({ dialog, onClose, onSave }) {
   )
 }
 
-function CameraWidget({ widget }) {
+function CameraWidget({ widget, onOpen, isFloating }) {
   const [streamError, setStreamError] = useState(false)
 
   return (
     <article className="custom-widget camera-widget">
       <div className="custom-widget-heading">
         <div><span>CÂMERA AO VIVO</span><h3 title={widget.title}>{widget.title}</h3></div>
-        <span className="widget-unit">MJPEG</span>
+        <button className="camera-float-button" type="button" onClick={onOpen} disabled={isFloating} title={isFloating ? 'Câmera já está aberta na janela flutuante' : 'Abrir em janela flutuante'}>
+          <Icon name="monitor" size={13} />{isFloating ? 'Aberta' : 'Flutuar'}
+        </button>
       </div>
       <div className="camera-stream">
-        <img src={widget.cameraUrl} draggable="false" alt={`Transmissão ao vivo: ${widget.title}`} onError={() => setStreamError(true)} />
-        {streamError && <span className="camera-stream-error" role="status">Não foi possível carregar a câmera. Verifique o endereço, a conexão e as permissões.</span>}
+        {isFloating
+          ? <span className="camera-stream-placeholder">Transmissão aberta na janela flutuante.</span>
+          : <>
+            <img src={widget.cameraUrl} draggable="false" alt={`Transmissão ao vivo: ${widget.title}`} onError={() => setStreamError(true)} />
+            {streamError && <span className="camera-stream-error" role="status">Não foi possível carregar a câmera. Verifique o endereço, a conexão e as permissões.</span>}
+          </>}
       </div>
     </article>
   )
 }
 
-function MetricWidget({ widget, data, upsDevices = [] }) {
-  if (widget.type === 'camera') return <CameraWidget key={widget.cameraUrl} widget={widget} />
+function FloatingCameraStream({ widget }) {
+  const [streamError, setStreamError] = useState(false)
+
+  return (
+    <div className="floating-camera-stream">
+      <img src={widget.cameraUrl} draggable="false" alt={`Transmissão ao vivo: ${widget.title}`} onError={() => setStreamError(true)} />
+      {streamError && <span className="camera-stream-error" role="status">Não foi possível carregar a câmera. Verifique o endereço, a conexão e as permissões.</span>}
+    </div>
+  )
+}
+
+function MetricWidget({ widget, data, upsDevices = [], onOpenCamera, floatingCameraId }) {
+  if (widget.type === 'camera') return <CameraWidget key={widget.cameraUrl} widget={widget} onOpen={() => onOpenCamera(widget)} isFloating={floatingCameraId === widget.id} />
   if (widget.type === 'ups') {
     const ups = upsDevices.find((item) => item.host_name === widget.hostName)
     return ups
@@ -1395,6 +1413,10 @@ function App() {
   const [alertPeriod, setAlertPeriod] = useState('all')
   const [kioskMode, setKioskMode] = useState(false)
   const [kioskPaused, setKioskPaused] = useState(false)
+  const [kioskGridSize, setKioskGridSize] = useState(4)
+  const [kioskGridPages, setKioskGridPages] = useState({})
+  const [floatingCamera, setFloatingCamera] = useState(null)
+  const [floatingCameraPosition, setFloatingCameraPosition] = useState({ x: 24, y: 90 })
   const [configError, setConfigError] = useState('')
   const [sectionDialog, setSectionDialog] = useState(null)
   const [confirmation, setConfirmation] = useState(null)
@@ -1402,6 +1424,8 @@ function App() {
   const [widgetHistories, setWidgetHistories] = useState({})
   const [saveNotice, setSaveNotice] = useState(null)
   const dashboardRef = useRef(dashboard)
+  const floatingCameraRef = useRef(null)
+  const cameraDragOffset = useRef(null)
   const requestInProgress = useRef(false)
   const configSaveQueue = useRef(Promise.resolve())
   const saveRevision = useRef(0)
@@ -1908,6 +1932,37 @@ function App() {
   }, [])
 
   useEffect(() => {
+    const updateGridSize = () => {
+      setKioskGridSize(window.innerWidth >= 1600 ? 5 : window.innerWidth >= 1100 ? 4 : 3)
+    }
+    updateGridSize()
+    window.addEventListener('resize', updateGridSize)
+    return () => window.removeEventListener('resize', updateGridSize)
+  }, [])
+
+  useEffect(() => {
+    const moveCameraWindow = (event) => {
+      if (!cameraDragOffset.current) return
+      const bounds = floatingCameraRef.current?.getBoundingClientRect()
+      const width = bounds?.width || Math.min(640, window.innerWidth - 24)
+      const height = bounds?.height || Math.min(460, window.innerHeight - 24)
+      setFloatingCameraPosition({
+        x: Math.max(12, Math.min(window.innerWidth - width - 12, event.clientX - cameraDragOffset.current.x)),
+        y: Math.max(12, Math.min(window.innerHeight - height - 12, event.clientY - cameraDragOffset.current.y)),
+      })
+    }
+    const stopCameraWindowDrag = () => { cameraDragOffset.current = null }
+    window.addEventListener('pointermove', moveCameraWindow)
+    window.addEventListener('pointerup', stopCameraWindowDrag)
+    window.addEventListener('pointercancel', stopCameraWindowDrag)
+    return () => {
+      window.removeEventListener('pointermove', moveCameraWindow)
+      window.removeEventListener('pointerup', stopCameraWindowDrag)
+      window.removeEventListener('pointercancel', stopCameraWindowDrag)
+    }
+  }, [])
+
+  useEffect(() => {
     const updateNow = () => setClockNow(Date.now())
     const initial = window.setTimeout(updateNow, 0)
     const interval = window.setInterval(updateNow, 10_000)
@@ -2410,6 +2465,23 @@ function App() {
     alertsByHost.set(alert.hostName, hostAlerts)
   }
 
+  function openCameraWidget(widget) {
+    const width = Math.min(640, window.innerWidth - 24)
+    setFloatingCamera(widget)
+    setFloatingCameraPosition({
+      x: Math.max(12, window.innerWidth - width - 24),
+      y: 82,
+    })
+  }
+
+  function startCameraWindowDrag(event) {
+    if (event.button !== 0 || event.target.closest('button')) return
+    const bounds = floatingCameraRef.current?.getBoundingClientRect()
+    if (!bounds) return
+    cameraDragOffset.current = { x: event.clientX - bounds.left, y: event.clientY - bounds.top }
+    event.preventDefault()
+  }
+
   function toggleAlertCenter() {
     const open = !alertCenterOpen
     if (open) {
@@ -2528,7 +2600,7 @@ function App() {
           }
         } : undefined}
       >
-        <MetricWidget widget={{ ...widget, dashboardType: isTopology ? 'topology' : layout.type }} data={widgetHistories} upsDevices={dashboard.ups} />
+        <MetricWidget widget={{ ...widget, dashboardType: isTopology ? 'topology' : layout.type }} data={widgetHistories} upsDevices={dashboard.ups} onOpenCamera={openCameraWidget} floatingCameraId={floatingCamera?.id} />
         {canEditDashboard && <div className={`widget-controls nodrag ${isAdministrator ? '' : 'moderator-controls'}`} role="group" aria-label={`Controles de ${widget.title}`}>
           {isAdministrator && <><button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button><span className="widget-control-divider" /></>}
           {!isTopology && <>
@@ -2696,32 +2768,6 @@ function App() {
                 <Icon name="bell" size={17} />
                 {unreadAlertCount > 0 && <span className="alert-center-count">{unreadAlertCount > 99 ? '99+' : unreadAlertCount}</span>}
               </button>
-              {alertCenterOpen && (
-                <section className="global-alert-popover" id="global-alert-popover" aria-label="Alertas ativos">
-                  <header><div><strong>Alertas ativos</strong><span>{activeAlerts.length} em acompanhamento</span></div><button type="button" aria-label="Fechar alertas" onClick={() => setAlertCenterOpen(false)}><Icon name="close" size={15} /></button></header>
-                  <div className="global-alert-list">
-                    {sortedActiveAlerts.length ? sortedActiveAlerts.slice(0, 8).map((alert) => (
-                      <button
-                        className={`global-alert-item ${alert.severity}`}
-                        key={alert.id}
-                        type="button"
-                        title={`${alert.hostName}: ${alert.description}`}
-                        onClick={() => {
-                          setAlertCenterOpen(false)
-                          window.location.hash = authUser.role === 'view'
-                            ? `#/dashboard/${authUser.dashboardIds[0]}`
-                            : '#/alerts'
-                        }}
-                      >
-                        <span className={`severity-dot ${alert.severity}`} />
-                        <span><strong>{alert.hostName}</strong><small>{alert.description}</small></span>
-                        <time>{new Date(alert.startedAt).toLocaleTimeString('pt-BR')}</time>
-                      </button>
-                    )) : <p className="global-alert-empty">Nenhum alerta ativo no momento.</p>}
-                  </div>
-                  {authUser.role !== 'view' && <a className="global-alert-footer" href="#/alerts" onClick={() => setAlertCenterOpen(false)}>Abrir central de alertas <span>→</span></a>}
-                </section>
-              )}
             </div>
             {kioskMode && <button className="icon-button" type="button" onClick={() => setKioskPaused((value) => !value)} aria-label={kioskPaused ? 'Retomar rotação' : 'Pausar rotação'}>{kioskPaused ? '▶' : 'Ⅱ'}</button>}
             <span className="user-role-label">{ROLE_LABELS[authUser.role]?.split(' · ')[0]}</span>
@@ -2966,6 +3012,16 @@ function App() {
               ? orderVisible(dashboard.servers, activeLayout.orderServers, activeLayout.hiddenServers)
                 .filter((server) => server.host_name.toLowerCase().includes(search.toLowerCase()))
               : cardsForSection(section)
+            const useKioskSquareGrid = kioskMode && !isConsumptionSection && !isUpsSection && !isTopologySection
+            const kioskPageCapacity = kioskGridSize ** 2
+            const kioskPageCount = Math.max(1, Math.ceil(sectionCards.length / kioskPageCapacity))
+            const kioskPage = Math.min(kioskGridPages[section.id] || 0, kioskPageCount - 1)
+            const displayedSectionCards = useKioskSquareGrid
+              ? sectionCards.slice(kioskPage * kioskPageCapacity, (kioskPage + 1) * kioskPageCapacity)
+              : sectionCards
+            const kioskPlaceholderCount = useKioskSquareGrid && sectionCards.length
+              ? kioskPageCapacity - displayedSectionCards.length
+              : 0
             const isIcmp = section.kind === 'icmp'
             const isVirtualServerSection = section.id === '__all_servers__'
             const sectionIcon = isTopologySection ? 'network' : isConsumptionSection ? 'activity' : isUpsSection ? 'battery' : isIcmp ? 'network' : 'server'
@@ -2992,6 +3048,11 @@ function App() {
                   </div>
                   <div className="section-actions">
                     <span className="section-counter">{isConsumptionSection || isTopologySection ? sectionWidgets.length : sectionCards.length} {sectionCountLabel}{!isConsumptionSection && !isTopologySection && sectionWidgets.length ? ` · ${sectionWidgets.length} câmera(s)` : ''}</span>
+                    {useKioskSquareGrid && kioskPageCount > 1 && <div className="kiosk-grid-pager" aria-label={`Página de cards, grade ${kioskGridSize} por ${kioskGridSize}`}>
+                      <button type="button" aria-label="Página anterior de cards" onClick={() => setKioskGridPages((pages) => ({ ...pages, [section.id]: Math.max(0, kioskPage - 1) }))} disabled={kioskPage === 0}><Icon name="chevron" size={14} className="chevron-left" /></button>
+                      <span>{kioskPage + 1}/{kioskPageCount} · {kioskGridSize}×{kioskGridSize}</span>
+                      <button type="button" aria-label="Próxima página de cards" onClick={() => setKioskGridPages((pages) => ({ ...pages, [section.id]: Math.min(kioskPageCount - 1, kioskPage + 1) }))} disabled={kioskPage >= kioskPageCount - 1}><Icon name="chevron" size={14} /></button>
+                    </div>}
                     {editMode && canEditDashboard && <button className="edit-panel-button consumption-add-button" type="button" onClick={() => setWidgetDialog({ sectionId: section.id, sectionKind: section.kind })}><Icon name="plus" size={14} />{isConsumptionSection ? 'Adicionar indicador' : isTopologySection ? 'Adicionar equipamento' : 'Adicionar câmera'}</button>}
                     {editMode && isAdministrator && !isVirtualServerSection && !isUpsSection && <>
                       <button className="section-action" type="button" aria-label={`Renomear ${section.title}`} onClick={() => setSectionDialog({ mode: 'rename', id: section.id, title: section.title, kind: section.kind })}><Icon name="edit" size={13} /></button>
@@ -3019,7 +3080,7 @@ function App() {
                     <div className="custom-widget-grid consumption-widget-grid">
                       {sectionWidgets.map((widget, index) => (
                         <div className={`custom-widget-wrap widget-width-${widget.width || 1}`} style={{ '--widget-height': widget.height || 2 }} key={widget.id}>
-                          <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} upsDevices={dashboard.ups} />
+                          <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} upsDevices={dashboard.ups} onOpenCamera={openCameraWidget} floatingCameraId={floatingCamera?.id} />
                           {canEditDashboard && <div className={`widget-controls ${isAdministrator ? '' : 'moderator-controls'}`} role="group" aria-label={`Controles de ${widget.title}`}>
                             {isAdministrator && <><button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button><span className="widget-control-divider" /></>}
                             <button type="button" onClick={() => moveWidget(widget.id, -1)} disabled={index === 0} aria-label={`Mover ${widget.title} para esquerda`} title="Mover para esquerda"><Icon name="chevron" size={14} className="chevron-left" /></button>
@@ -3047,15 +3108,17 @@ function App() {
                   )
                 ) : sectionCards.length ? (
                   <div
-                    className={`${isIcmp ? 'icmp-grid' : 'server-grid'} ${editMode ? 'grid-editing' : ''}`}
+                    className={`${isIcmp ? 'icmp-grid' : 'server-grid'} ${editMode ? 'grid-editing' : ''}${useKioskSquareGrid ? ' kiosk-square-grid' : ''}`}
+                    style={useKioskSquareGrid ? { '--kiosk-grid-size': kioskGridSize } : undefined}
                     onDragOver={(event) => { if (editMode) event.preventDefault() }}
                     onDrop={(event) => handleDrop(event, section, null)}
                   >
-                    {sectionCards.map((item) => (
+                    {displayedSectionCards.map((item) => (
                       isIcmp
                         ? <IcmpCard key={item.host_name} host={item} alerts={alertsByHost.get(item.host_name)} size={activeLayout.cardSizes[`icmp:${item.host_name}`]} onResize={resizeHostCardByDrag} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
                         : <ServerCard key={item.host_name} server={item} alerts={alertsByHost.get(item.host_name)} diskWarningPct={config?.alertRules.diskWarningPct ?? 80} diskCriticalPct={config?.alertRules.diskCriticalPct ?? 90} size={activeLayout.cardSizes[`servers:${item.host_name}`]} onResize={resizeHostCardByDrag} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
                     ))}
+                    {Array.from({ length: kioskPlaceholderCount }, (_, index) => <div className="kiosk-grid-placeholder" key={`empty-${index}`} aria-hidden="true" />)}
                   </div>
                 ) : (
                   sectionWidgets.length ? null : <EmptyState title={cardEmptyTitle} detail={cardEmptyDetail} />
@@ -3064,7 +3127,7 @@ function App() {
                   <div className="custom-widget-grid section-camera-grid">
                     {sectionWidgets.map((widget) => (
                       <div className={`custom-widget-wrap widget-width-${widget.width || 2}`} style={{ '--widget-height': widget.height || 3 }} key={widget.id}>
-                        <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} upsDevices={dashboard.ups} />
+                        <MetricWidget widget={{ ...widget, dashboardType: layout.type }} data={widgetHistories} upsDevices={dashboard.ups} onOpenCamera={openCameraWidget} floatingCameraId={floatingCamera?.id} />
                         {canEditDashboard && <div className="widget-controls" role="group" aria-label={`Controles de ${widget.title}`}>
                           {isAdministrator && <><button type="button" onClick={() => configureWidget(widget)} aria-label={`Configurar ${widget.title}`} title="Configurar"><Icon name="edit" size={13} /></button><span className="widget-control-divider" /></>}
                           {isAdministrator && <>
@@ -3086,8 +3149,35 @@ function App() {
           <footer className="page-footer"><span>NTIBIX <i>·</i> MONITORAMENTO E OBSERVABILIDADE</span><span>Dados fornecidos pelo Zabbix <span className="footer-live" /></span></footer>
         </div>
       </main>
+      {alertCenterOpen && createPortal(
+        <section className="global-alert-popover" id="global-alert-popover" aria-label="Alertas ativos">
+          <header><div><strong>Alertas ativos</strong><span>{activeAlerts.length} em acompanhamento</span></div><button type="button" aria-label="Fechar alertas" onClick={() => setAlertCenterOpen(false)}><Icon name="close" size={15} /></button></header>
+          <div className="global-alert-list">
+            {sortedActiveAlerts.length ? sortedActiveAlerts.slice(0, 8).map((alert) => (
+              <button
+                className={`global-alert-item ${alert.severity}`}
+                key={alert.id}
+                type="button"
+                title={`${alert.hostName}: ${alert.description}`}
+                onClick={() => {
+                  setAlertCenterOpen(false)
+                  window.location.hash = authUser.role === 'view'
+                    ? `#/dashboard/${authUser.dashboardIds[0]}`
+                    : '#/alerts'
+                }}
+              >
+                <span className={`severity-dot ${alert.severity}`} />
+                <span><strong>{alert.hostName}</strong><small>{alert.description}</small></span>
+                <time>{new Date(alert.startedAt).toLocaleTimeString('pt-BR')}</time>
+              </button>
+            )) : <p className="global-alert-empty">Nenhum alerta ativo no momento.</p>}
+          </div>
+          {authUser.role !== 'view' && <a className="global-alert-footer" href="#/alerts" onClick={() => setAlertCenterOpen(false)}>Abrir central de alertas <span>→</span></a>}
+        </section>,
+        document.body,
+      )}
       {alertToast && authUser && (
-        <aside className={`alert-toast ${alertToast.severity}`} role="alert" aria-live="assertive">
+        createPortal(<aside className={`alert-toast ${alertToast.severity}`} role="alert" aria-live="assertive">
           <button
             className="alert-toast-content"
             type="button"
@@ -3102,7 +3192,22 @@ function App() {
             <span><strong>{alertToast.severity === 'critical' ? 'Alerta crítico' : 'Novo alerta'} · {alertToast.hostName}</strong><small>{alertToast.description}</small></span>
           </button>
           <button className="alert-toast-close" type="button" aria-label="Dispensar alerta" onClick={() => setAlertToast(null)}><Icon name="close" size={15} /></button>
-        </aside>
+        </aside>, document.body)
+      )}
+      {floatingCamera && createPortal(
+        <aside
+          className="floating-camera-window"
+          ref={floatingCameraRef}
+          style={{ left: `${floatingCameraPosition.x}px`, top: `${floatingCameraPosition.y}px` }}
+          aria-label={`Janela flutuante: ${floatingCamera.title}`}
+        >
+          <header className="floating-camera-header" onPointerDown={startCameraWindowDrag}>
+            <div><span>CÂMERA AO VIVO</span><strong>{floatingCamera.title}</strong></div>
+            <button type="button" aria-label="Fechar janela da câmera" onClick={() => setFloatingCamera(null)}><Icon name="close" size={15} /></button>
+          </header>
+          <FloatingCameraStream widget={floatingCamera} />
+        </aside>,
+        document.body,
       )}
       {saveNotice && (
         <div className={`save-toast ${saveNotice.type}`} role={saveNotice.type === 'error' ? 'alert' : 'status'} aria-live="polite">
