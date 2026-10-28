@@ -4,7 +4,12 @@ const byteCounterUnits = new Set(['B', 'byte', 'bytes'])
 
 export function getConnectionTrafficItems(connections) {
   return (Array.isArray(connections) ? connections : [])
-    .filter((connection) => connection.trafficItem?.itemId)
+    .flatMap((connection) => {
+      const trafficItems = connection.trafficItems
+        ? Object.values(connection.trafficItems)
+        : [connection.trafficItem]
+      return trafficItems.filter((item) => item?.itemId)
+    })
 }
 
 export function getConnectionHealth(sourceState, targetState, healthyColor = 'green') {

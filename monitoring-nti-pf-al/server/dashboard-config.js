@@ -288,6 +288,7 @@ function normalizeDashboard(dashboard) {
     const sourceHandle = connection?.sourceHandle ?? 'source-right'
     const targetHandle = connection?.targetHandle ?? 'target-left'
     const healthyColor = connection?.healthyColor ?? 'green'
+    const edgeStyle = connection?.edgeStyle ?? 'smoothstep'
     if (!/^[a-zA-Z0-9_-]{1,160}$/.test(id)
       || connectionIds.has(id)
       || !widgetIds.has(source)
@@ -295,7 +296,8 @@ function normalizeDashboard(dashboard) {
       || source === target
       || (sourceHandle !== undefined && !['source-top', 'source-right', 'source-bottom', 'source-left'].includes(sourceHandle))
       || (targetHandle !== undefined && !['target-top', 'target-right', 'target-bottom', 'target-left'].includes(targetHandle))
-      || !['green', 'blue'].includes(healthyColor)) {
+      || !['green', 'blue'].includes(healthyColor)
+      || !['smoothstep', 'bezier', 'straight'].includes(edgeStyle)) {
       throw new Error('Conexão inválida no mapa. Verifique os indicadores de origem e destino.')
     }
     const sourceArea = topologyAreaForWidget(widgetById.get(source))
@@ -305,9 +307,16 @@ function normalizeDashboard(dashboard) {
     }
     connectionIds.add(id)
     const label = typeof connection.label === 'string' ? connection.label.trim().slice(0, 80) : ''
-    let trafficItem
-    if (connection.trafficItem !== undefined && connection.trafficItem !== null) {
-      const item = connection.trafficItem
+    const trafficItems = {}
+    const configuredTrafficItems = connection.trafficItems && typeof connection.trafficItems === 'object'
+      ? connection.trafficItems
+      : connection.trafficItem
+        ? { [connection.trafficItem.key?.toLowerCase().includes('net.if.out') ? 'sent' : 'received']: connection.trafficItem }
+        : {}
+    for (const [direction, item] of Object.entries(configuredTrafficItems)) {
+      if (!['received', 'sent'].includes(direction) || !item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new Error('Direção de tráfego inválida para a conexão.')
+      }
       const itemId = Number(item.itemId)
       const hostId = Number(item.hostId)
       const unit = typeof item.unit === 'string' ? item.unit.trim().replace(/\s+/g, '') : ''
@@ -321,7 +330,7 @@ function normalizeDashboard(dashboard) {
         || !supportedUnit) {
         throw new Error('Métrica de tráfego inválida. Selecione um item numérico em bits/s, bytes/s ou um contador de bytes.')
       }
-      trafficItem = {
+      trafficItems[direction] = {
         itemId,
         hostId,
         hostName: item.hostName.trim(),
@@ -337,8 +346,9 @@ function normalizeDashboard(dashboard) {
       sourceHandle,
       targetHandle,
       healthyColor,
+      edgeStyle,
       ...(label ? { label } : {}),
-      ...(trafficItem ? { trafficItem } : {}),
+      ...(Object.keys(trafficItems).length ? { trafficItems } : {}),
     }
   })
   const normalizeNames = (items, field) => {

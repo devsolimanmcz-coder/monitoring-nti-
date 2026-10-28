@@ -24,10 +24,15 @@ test('identifies inbound and outbound interface metrics', () => {
 test('includes traffic configured on organization topology sections', () => {
   const connections = [
     { id: 'section-map-link', trafficItem: { itemId: 123 } },
+    { id: 'two-way-link', trafficItems: { received: { itemId: 456 }, sent: { itemId: 789 } } },
     { id: 'unconfigured-link' },
   ]
 
-  assert.deepEqual(getConnectionTrafficItems(connections), [connections[0]])
+  assert.deepEqual(getConnectionTrafficItems(connections), [
+    connections[0].trafficItem,
+    connections[1].trafficItems.received,
+    connections[1].trafficItems.sent,
+  ])
 })
 
 test('converts bit and byte rates to Mbps', () => {

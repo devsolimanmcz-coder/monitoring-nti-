@@ -124,7 +124,11 @@ async function userCanReadHistoryItems(user, itemIds) {
     .filter((dashboard) => user.dashboardIds.includes(dashboard.id))
     .flatMap((dashboard) => [
       ...dashboard.widgets.flatMap((widget) => widget.itemIds || [widget.itemId]),
-      ...dashboard.connections.map((connection) => connection.trafficItem?.itemId),
+      ...dashboard.connections.flatMap((connection) => Object.values(
+        connection.trafficItems || (connection.trafficItem ? {
+          [connection.trafficItem.key?.toLowerCase().includes('net.if.out') ? 'sent' : 'received']: connection.trafficItem,
+        } : {}),
+      ).map((item) => item.itemId)),
     ])
     .map(Number))
   return itemIds.every((itemId) => permittedIds.has(itemId))

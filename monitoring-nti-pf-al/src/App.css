@@ -543,6 +543,8 @@
 .topology-connection-toolbar { display: flex; align-items: center; gap: 9px; padding: 8px 10px; color: #b6d2e3; background: rgba(8,17,29,.96); border: 1px solid rgba(56,214,255,.28); border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,.32); font-size: 10px; }
 .topology-connection-toolbar > span { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topology-connection-toolbar .edit-panel-button { min-height: 28px; padding: 0 9px; white-space: nowrap; }
+.topology-connection-toolbar .topology-connection-delete { color: #ff9a9a; border-color: rgba(255,111,125,.3); }
+.topology-connection-toolbar .topology-connection-delete:hover { color: #ffc0c5; background: rgba(255,111,125,.1); }
 .connection-traffic-dialog { max-width: 520px; }
 .connection-traffic-dialog > .dialog-hint { margin: 0; }
 .connection-traffic-remove { margin-right: auto; color: #e6a3a9; border-color: rgba(255,111,125,.3); }
@@ -836,3 +838,6 @@
 :root[data-theme="high-contrast"] .nav-link,:root[data-theme="high-contrast"] .update-info,:root[data-theme="high-contrast"] .page-heading p,:root[data-theme="high-contrast"] .section-title p,:root[data-theme="high-contrast"] .metric-detail { color: #d4deeb; }
 :root[data-theme="high-contrast"] .metric-card,:root[data-theme="high-contrast"] .icmp-card,:root[data-theme="high-contrast"] .server-card,:root[data-theme="high-contrast"] .ups-card,:root[data-theme="high-contrast"] .custom-widget,:root[data-theme="high-contrast"] .overview-panel,:root[data-theme="high-contrast"] .settings-panel,:root[data-theme="high-contrast"] .dashboard-tile { border-color: rgba(222,236,255,.48); }
 :root[data-theme="high-contrast"] .global-alert-popover,:root[data-theme="high-contrast"] .alert-toast { border-width: 2px; }
+.topology-edge-labels { display: grid; gap: 3px; min-width: max-content; padding: 5px 8px; color: #eaf7ff; background: rgba(11,23,36,.96); border: 1px solid rgba(95,174,211,.34); border-radius: 7px; box-shadow: 0 3px 12px rgba(0,0,0,.35); font-size: 10px; font-weight: 700; line-height: 1.25; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.topology-edge-label { display: block; }
+.topology-edge-label + .topology-edge-label { padding-top: 3px; border-top: 1px solid rgba(139,164,198,.2); }

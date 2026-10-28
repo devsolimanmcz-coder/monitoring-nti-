@@ -218,6 +218,7 @@ test('persists topology connections and rejects references to missing widgets', 
     sourceHandle: 'source-right',
     targetHandle: 'target-left',
     healthyColor: 'green',
+    edgeStyle: 'smoothstep',
   }])
 
   config.dashboards[0].connections[0].target = 'missing-node'
@@ -266,6 +267,7 @@ test('allows topology sections with their own map nodes and connections', async 
     target: 'section-switch',
     targetHandle: 'target-left',
     healthyColor: 'blue',
+    edgeStyle: 'smoothstep',
   }]
 
   const saved = await saveDashboardConfig(config)
@@ -311,6 +313,7 @@ test('persists Zabbix traffic metrics on topology connections', async () => {
     target: 'switch-node',
     targetHandle: 'target-left',
     healthyColor: 'blue',
+    edgeStyle: 'bezier',
     trafficItem: {
       itemId: 789,
       hostId: 456,
@@ -323,10 +326,13 @@ test('persists Zabbix traffic metrics on topology connections', async () => {
 
   const saved = await saveDashboardConfig(config)
 
-  assert.deepEqual(saved.dashboards[0].connections[0].trafficItem, dashboard.connections[0].trafficItem)
+  assert.deepEqual(saved.dashboards[0].connections[0].trafficItems, {
+    received: dashboard.connections[0].trafficItem,
+  })
   assert.equal(saved.dashboards[0].connections[0].sourceHandle, 'source-right')
   assert.equal(saved.dashboards[0].connections[0].targetHandle, 'target-left')
   assert.equal(saved.dashboards[0].connections[0].healthyColor, 'blue')
+  assert.equal(saved.dashboards[0].connections[0].edgeStyle, 'bezier')
 
   dashboard.connections[0].sourceHandle = 'target-left'
   await assert.rejects(saveDashboardConfig(config), /Conexão inválida no mapa/)
@@ -345,6 +351,40 @@ test('rejects unsupported healthy connection colors', async () => {
   }]
 
   await assert.rejects(saveDashboardConfig(config), /Conexão inválida no mapa/)
+})
+
+test('persists received and sent traffic metrics on one connection', async () => {
+  const config = configWithWidget({ id: 'router-node' })
+  const dashboard = config.dashboards[0]
+  dashboard.type = 'topology'
+  dashboard.widgets.push({ ...dashboard.widgets[0], id: 'switch-node', title: 'Switch' })
+  dashboard.connections = [{
+    id: 'router-switch',
+    source: 'router-node',
+    target: 'switch-node',
+    trafficItems: {
+      received: {
+        itemId: 789,
+        hostId: 456,
+        hostName: 'Roteador',
+        itemName: 'Tráfego recebido',
+        key: 'net.if.in[eth0]',
+        unit: 'Bps',
+      },
+      sent: {
+        itemId: 790,
+        hostId: 456,
+        hostName: 'Roteador',
+        itemName: 'Tráfego enviado',
+        key: 'net.if.out[eth0]',
+        unit: 'Bps',
+      },
+    },
+  }]
+
+  const saved = await saveDashboardConfig(config)
+
+  assert.deepEqual(saved.dashboards[0].connections[0].trafficItems, dashboard.connections[0].trafficItems)
 })
 
 test('persists multiple independent topology dashboards and their device icons', async () => {

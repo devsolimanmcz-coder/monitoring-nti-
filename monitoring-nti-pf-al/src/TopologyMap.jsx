@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   addEdge,
   applyNodeChanges,
+  BaseEdge,
   Background,
   Controls,
+  EdgeLabelRenderer,
+  getBezierPath,
+  getSmoothStepPath,
+  getStraightPath,
   Handle,
   MarkerType,
   MiniMap,
@@ -34,8 +39,49 @@ function TopologyWidgetNode({ data, selected }) {
 
 const nodeTypes = { topologyWidget: TopologyWidgetNode }
 
+function TopologyTrafficEdge({
+  id,
+  sourceX,
+  sourceY,
+  sourcePosition,
+  targetX,
+  targetY,
+  targetPosition,
+  markerEnd,
+  style,
+  data,
+}) {
+  const pathOptions = { sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition }
+  const [path, labelX, labelY] = data.edgeStyle === 'straight'
+    ? getStraightPath(pathOptions)
+    : data.edgeStyle === 'bezier'
+      ? getBezierPath(pathOptions)
+      : getSmoothStepPath(pathOptions)
+
+  return (
+    <>
+      <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} />
+      {data.trafficLabels.length > 0 && <EdgeLabelRenderer>
+        <div
+          className="topology-edge-labels nodrag nopan"
+          style={{
+            position: 'absolute',
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            pointerEvents: 'all',
+          }}
+          aria-label={data.trafficLabels.join(', ')}
+        >
+          {data.trafficLabels.map((label) => <span className="topology-edge-label" key={label}>{label}</span>)}
+        </div>
+      </EdgeLabelRenderer>}
+    </>
+  )
+}
+
+const edgeTypes = { topologyTraffic: TopologyTrafficEdge }
+
 function persistableEdges(edges) {
-  return edges.map(({ id, source, target, sourceHandle, targetHandle, label, trafficItem }) => ({
+  return edges.map(({ id, source, target, sourceHandle, targetHandle, label, trafficItem, trafficItems, healthyColor, edgeStyle }) => ({
     id,
     source,
     target,
@@ -43,6 +89,9 @@ function persistableEdges(edges) {
     ...(typeof targetHandle === 'string' ? { targetHandle } : {}),
     ...(typeof label === 'string' && label ? { label } : {}),
     ...(trafficItem ? { trafficItem } : {}),
+    ...(trafficItems ? { trafficItems } : {}),
+    ...(healthyColor ? { healthyColor } : {}),
+    ...(edgeStyle ? { edgeStyle } : {}),
   }))
 }
 
@@ -57,20 +106,10 @@ export default function TopologyMap({
   onConnectionsChange,
   onConfigureConnection,
 }) {
-  const mapRef = useRef(null)
-  const flowRef = useRef(null)
-  const previousGeometryRef = useRef(null)
   const [selectedNodeIds, setSelectedNodeIds] = useState([])
   const [selectedEdgeIds, setSelectedEdgeIds] = useState([])
   const [positionOverrides, setPositionOverrides] = useState({})
   const [nodeDimensions, setNodeDimensions] = useState({})
-  const geometryKey = JSON.stringify(initialNodes.map(({ id, position, style }) => [
-    id,
-    position.x,
-    position.y,
-    style?.width,
-    style?.height,
-  ]))
   const nodes = useMemo(() => initialNodes.map((node) => {
     const override = positionOverrides[node.id]
     const canKeepLocalPosition = override
@@ -90,46 +129,37 @@ export default function TopologyMap({
     const sourceState = nodes.find((node) => node.id === connection.source)?.data.availability?.state
     const targetState = nodes.find((node) => node.id === connection.target)?.data.availability?.state
     const health = getConnectionHealth(sourceState, targetState, connection.healthyColor)
-    const label = traffic
-      ? `${traffic.direction ? `${traffic.direction} · ` : ''}${traffic.value === null ? '—' : new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(traffic.value)} Mbps`
-      : connection.label
+    const trafficLabels = traffic
+      ? Object.entries(traffic)
+        .filter(([, value]) => value)
+        .map(([direction, value]) => `${direction === 'received' ? 'RECEBIDO' : 'ENVIADO'} · ${value.value === null ? '—' : new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(value.value)} Mbps`)
+      : []
+    const hasTrafficLabels = trafficLabels.length > 0
+    const healthColor = health.color
     return {
       ...connection,
-      label,
+      label: hasTrafficLabels ? undefined : connection.label,
+      data: {
+        ...connection.data,
+        edgeStyle: connection.edgeStyle || 'smoothstep',
+        trafficLabels,
+      },
       labelStyle: { fill: '#eaf7ff', fontSize: 12, fontWeight: 700 },
       labelBgStyle: { fill: '#0b1724', fillOpacity: 0.94 },
       labelBgPadding: [8, 4],
       labelBgBorderRadius: 6,
-      labelShowBg: Boolean(label),
-      ariaLabel: traffic?.title || connection.label || 'Conexão de rede',
-      type: 'smoothstep',
+      labelShowBg: Boolean(connection.label && !hasTrafficLabels),
+      ariaLabel: Object.values(traffic || {}).map((item) => item.title).filter(Boolean).join(' | ')
+        || connection.label
+        || 'Conexão de rede',
+      type: hasTrafficLabels ? 'topologyTraffic' : connection.edgeStyle || 'smoothstep',
       animated: true,
       deletable: editable,
       selected: selectedEdgeIds.includes(connection.id),
-      style: { stroke: health?.color || edgeColor, strokeWidth: 2, strokeDasharray: '7 5' },
-      markerEnd: { type: MarkerType.ArrowClosed, color: health?.color || edgeColor },
+      style: { stroke: healthColor, strokeWidth: 2 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: healthColor },
     }
   }), [connectionTraffic, connections, editable, nodes, selectedEdgeIds])
-
-  const fitViewIfNodesAreOutsideMap = useCallback(() => {
-    const mapElement = mapRef.current
-    const flow = flowRef.current
-    if (!mapElement || !flow) return
-
-    const { x, y, zoom } = flow.getViewport()
-    const hasNodeOutsideMap = flow.getNodes().some((node) => {
-      const width = (node.measured?.width ?? node.width ?? 0) * zoom
-      const height = (node.measured?.height ?? node.height ?? 0) * zoom
-      const left = node.position.x * zoom + x
-      const top = node.position.y * zoom + y
-      return left < 0
-        || top < 0
-        || left + width > mapElement.clientWidth
-        || top + height > mapElement.clientHeight
-    })
-
-    if (hasNodeOutsideMap) flow.fitView({ padding: 0.18, maxZoom: 1 })
-  }, [])
 
   const handleNodesChange = useCallback((changes) => {
     const dimensionChanges = changes.filter((change) => change.type === 'dimensions')
@@ -203,7 +233,7 @@ export default function TopologyMap({
       id: globalThis.crypto?.randomUUID?.() || `link-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
       type: 'smoothstep',
       animated: true,
-      style: { stroke: edgeColor, strokeWidth: 2, strokeDasharray: '7 5' },
+      style: { stroke: edgeColor, strokeWidth: 2 },
       markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
     }, edges)
     onConnectionsChange(persistableEdges(nextEdges))
@@ -213,26 +243,17 @@ export default function TopologyMap({
     type: 'smoothstep',
     animated: true,
     deletable: editable,
-    style: { stroke: edgeColor, strokeWidth: 2, strokeDasharray: '7 5' },
+    style: { stroke: edgeColor, strokeWidth: 2 },
     markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
   }), [editable])
 
-  useEffect(() => {
-    const previousGeometry = previousGeometryRef.current
-    previousGeometryRef.current = geometryKey
-    if (previousGeometry === null || previousGeometry === geometryKey) return undefined
-
-    const frame = window.requestAnimationFrame(fitViewIfNodesAreOutsideMap)
-    return () => window.cancelAnimationFrame(frame)
-  }, [fitViewIfNodesAreOutsideMap, geometryKey])
-
   return (
-    <section ref={mapRef} className="topology-map" style={{ height }} aria-label="Mapa interativo de topologia de rede">
+    <section className="topology-map" style={{ height }} aria-label="Mapa interativo de topologia de rede">
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onInit={(flow) => { flowRef.current = flow }}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={handleNodesChange}
         onNodeDragStop={handleNodeDragStop}
         onNodeClick={(event, node) => {
@@ -257,10 +278,14 @@ export default function TopologyMap({
         zoomOnScroll
       >
         {editable && selectedEdge && <Panel position="top-right" className="topology-connection-toolbar nodrag nopan">
-          <span>{connectionTraffic[selectedEdge.id]?.title || 'Enlace selecionado'}</span>
+          <span>{Object.values(connectionTraffic[selectedEdge.id] || {}).map((item) => item.title).filter(Boolean).join(' | ') || 'Ligação selecionada'}</span>
           <button type="button" className="edit-panel-button" onClick={() => onConfigureConnection(selectedEdge)}>
-            {selectedEdge.trafficItem ? 'Configurar tráfego' : 'Configurar Mbps'}
+            {selectedEdge.trafficItems || selectedEdge.trafficItem ? 'Configurar tráfego' : 'Configurar Mbps'}
           </button>
+          <button type="button" className="edit-panel-button topology-connection-delete" onClick={() => {
+            onConnectionsChange(connections.filter((connection) => connection.id !== selectedEdge.id))
+            setSelectedEdgeIds([])
+          }}>Remover ligação</button>
         </Panel>}
         <Background color="rgba(90, 160, 205, .18)" gap={24} size={1} />
         <MiniMap
