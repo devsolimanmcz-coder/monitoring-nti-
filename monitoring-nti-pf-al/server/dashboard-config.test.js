@@ -213,7 +213,12 @@ test('persists topology connections and rejects references to missing widgets', 
   }]
 
   const saved = await saveDashboardConfig(config)
-  assert.deepEqual(saved.dashboards[0].connections, config.dashboards[0].connections)
+  assert.deepEqual(saved.dashboards[0].connections, [{
+    ...config.dashboards[0].connections[0],
+    sourceHandle: 'source-right',
+    targetHandle: 'target-left',
+    healthyColor: 'green',
+  }])
 
   config.dashboards[0].connections[0].target = 'missing-node'
   await assert.rejects(saveDashboardConfig(config), /Conexão inválida no mapa/)
@@ -254,13 +259,25 @@ test('allows topology sections with their own map nodes and connections', async 
   dashboard.widgets.push({
     ...configWithWidget({ id: 'section-switch', sectionId: 'core-map', type: 'availability', deviceKind: 'switch' }).dashboards[0].widgets[0],
   })
-  dashboard.connections = [{ id: 'core-link', source: 'section-router', target: 'section-switch' }]
+  dashboard.connections = [{
+    id: 'core-link',
+    source: 'section-router',
+    sourceHandle: 'source-right',
+    target: 'section-switch',
+    targetHandle: 'target-left',
+    healthyColor: 'blue',
+  }]
 
   const saved = await saveDashboardConfig(config)
 
   assert.deepEqual(saved.dashboards[0].sections, dashboard.sections)
   assert.equal(saved.dashboards[0].widgets[0].deviceKind, 'router')
-  assert.deepEqual(saved.dashboards[0].connections, dashboard.connections)
+  assert.deepEqual(saved.dashboards[0].connections, [{
+    ...dashboard.connections[0],
+    sourceHandle: 'source-right',
+    targetHandle: 'target-left',
+    healthyColor: 'blue',
+  }])
 })
 
 test('rejects links crossing between independent topology areas', async () => {
@@ -290,7 +307,10 @@ test('persists Zabbix traffic metrics on topology connections', async () => {
   dashboard.connections = [{
     id: 'router-switch',
     source: 'router-node',
+    sourceHandle: 'source-right',
     target: 'switch-node',
+    targetHandle: 'target-left',
+    healthyColor: 'blue',
     trafficItem: {
       itemId: 789,
       hostId: 456,
@@ -304,6 +324,27 @@ test('persists Zabbix traffic metrics on topology connections', async () => {
   const saved = await saveDashboardConfig(config)
 
   assert.deepEqual(saved.dashboards[0].connections[0].trafficItem, dashboard.connections[0].trafficItem)
+  assert.equal(saved.dashboards[0].connections[0].sourceHandle, 'source-right')
+  assert.equal(saved.dashboards[0].connections[0].targetHandle, 'target-left')
+  assert.equal(saved.dashboards[0].connections[0].healthyColor, 'blue')
+
+  dashboard.connections[0].sourceHandle = 'target-left'
+  await assert.rejects(saveDashboardConfig(config), /Conexão inválida no mapa/)
+})
+
+test('rejects unsupported healthy connection colors', async () => {
+  const config = configWithWidget({ id: 'router-node' })
+  const dashboard = config.dashboards[0]
+  dashboard.type = 'topology'
+  dashboard.widgets.push({ ...dashboard.widgets[0], id: 'switch-node', title: 'Switch' })
+  dashboard.connections = [{
+    id: 'router-switch',
+    source: 'router-node',
+    target: 'switch-node',
+    healthyColor: 'purple',
+  }]
+
+  await assert.rejects(saveDashboardConfig(config), /Conexão inválida no mapa/)
 })
 
 test('persists multiple independent topology dashboards and their device icons', async () => {

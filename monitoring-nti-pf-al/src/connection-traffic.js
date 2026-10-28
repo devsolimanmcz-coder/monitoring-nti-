@@ -7,6 +7,27 @@ export function getConnectionTrafficItems(connections) {
     .filter((connection) => connection.trafficItem?.itemId)
 }
 
+export function getConnectionHealth(sourceState, targetState, healthyColor = 'green') {
+  if (sourceState === 'down' || targetState === 'down') {
+    return { state: 'down', color: '#ff594f' }
+  }
+  if (sourceState === 'flapping' || sourceState === 'recovering'
+    || targetState === 'flapping' || targetState === 'recovering') {
+    return { state: 'unstable', color: '#f2b84b' }
+  }
+  if (sourceState === 'up' && targetState === 'up') {
+    return { state: 'up', color: healthyColor === 'blue' ? '#38bdf8' : '#47d7a0' }
+  }
+  return { state: 'unknown', color: '#8492a6' }
+}
+
+export function getTrafficDirection(key) {
+  const normalizedKey = typeof key === 'string' ? key.toLowerCase() : ''
+  if (normalizedKey.includes('net.if.in')) return 'RECEBIDO'
+  if (normalizedKey.includes('net.if.out')) return 'ENVIADO'
+  return ''
+}
+
 export function isSupportedTrafficUnit(unit) {
   const compactUnit = typeof unit === 'string' ? unit.trim().replace(/\s+/g, '') : ''
   return bitRateUnits.has(compactUnit) || byteRateUnits.has(compactUnit) || byteCounterUnits.has(compactUnit)

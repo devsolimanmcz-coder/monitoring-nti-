@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   addEdge,
+  applyNodeChanges,
   Background,
   Controls,
   Handle,
@@ -10,23 +11,22 @@ import {
   Position,
   ReactFlow,
 } from '@xyflow/react'
+import { getConnectionHealth } from './connection-traffic.js'
 import '@xyflow/react/dist/style.css'
 
 const edgeColor = '#38d6ff'
 
 function TopologyWidgetNode({ data, selected }) {
   return (
-    <div className={`topology-flow-node${selected ? ' selected' : ''}`}>
-      {data.editable && <>
-        <Handle className="topology-flow-handle" id="target-top" type="target" position={Position.Top} />
-        <Handle className="topology-flow-handle" id="source-top" type="source" position={Position.Top} />
-        <Handle className="topology-flow-handle" id="target-right" type="target" position={Position.Right} />
-        <Handle className="topology-flow-handle" id="source-right" type="source" position={Position.Right} />
-        <Handle className="topology-flow-handle" id="target-bottom" type="target" position={Position.Bottom} />
-        <Handle className="topology-flow-handle" id="source-bottom" type="source" position={Position.Bottom} />
-        <Handle className="topology-flow-handle" id="target-left" type="target" position={Position.Left} />
-        <Handle className="topology-flow-handle" id="source-left" type="source" position={Position.Left} />
-      </>}
+    <div className={`topology-flow-node${selected ? ' selected' : ''}${data.editable ? '' : ' topology-flow-node-readonly'}`}>
+      <Handle className="topology-flow-handle" id="target-top" type="target" position={Position.Top} />
+      <Handle className="topology-flow-handle" id="source-top" type="source" position={Position.Top} />
+      <Handle className="topology-flow-handle" id="target-right" type="target" position={Position.Right} />
+      <Handle className="topology-flow-handle" id="source-right" type="source" position={Position.Right} />
+      <Handle className="topology-flow-handle" id="target-bottom" type="target" position={Position.Bottom} />
+      <Handle className="topology-flow-handle" id="source-bottom" type="source" position={Position.Bottom} />
+      <Handle className="topology-flow-handle" id="target-left" type="target" position={Position.Left} />
+      <Handle className="topology-flow-handle" id="source-left" type="source" position={Position.Left} />
       {data.content}
     </div>
   )
@@ -35,10 +35,12 @@ function TopologyWidgetNode({ data, selected }) {
 const nodeTypes = { topologyWidget: TopologyWidgetNode }
 
 function persistableEdges(edges) {
-  return edges.map(({ id, source, target, label, trafficItem }) => ({
+  return edges.map(({ id, source, target, sourceHandle, targetHandle, label, trafficItem }) => ({
     id,
     source,
     target,
+    ...(typeof sourceHandle === 'string' ? { sourceHandle } : {}),
+    ...(typeof targetHandle === 'string' ? { targetHandle } : {}),
     ...(typeof label === 'string' && label ? { label } : {}),
     ...(trafficItem ? { trafficItem } : {}),
   }))
@@ -61,6 +63,7 @@ export default function TopologyMap({
   const [selectedNodeIds, setSelectedNodeIds] = useState([])
   const [selectedEdgeIds, setSelectedEdgeIds] = useState([])
   const [positionOverrides, setPositionOverrides] = useState({})
+  const [nodeDimensions, setNodeDimensions] = useState({})
   const geometryKey = JSON.stringify(initialNodes.map(({ id, position, style }) => [
     id,
     position.x,
@@ -75,15 +78,20 @@ export default function TopologyMap({
       && override.base.y === node.position.y
     return {
       ...node,
+      ...nodeDimensions[node.id],
       position: canKeepLocalPosition ? override.position : node.position,
       selected: selectedNodeIds.includes(node.id),
+      deletable: false,
     }
-  }), [initialNodes, positionOverrides, selectedNodeIds])
+  }), [initialNodes, nodeDimensions, positionOverrides, selectedNodeIds])
   const selectedEdge = connections.find((connection) => selectedEdgeIds.includes(connection.id))
   const edges = useMemo(() => connections.map((connection) => {
     const traffic = connectionTraffic[connection.id]
+    const sourceState = nodes.find((node) => node.id === connection.source)?.data.availability?.state
+    const targetState = nodes.find((node) => node.id === connection.target)?.data.availability?.state
+    const health = getConnectionHealth(sourceState, targetState, connection.healthyColor)
     const label = traffic
-      ? `${traffic.value === null ? '—' : new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(traffic.value)} Mbps`
+      ? `${traffic.direction ? `${traffic.direction} · ` : ''}${traffic.value === null ? '—' : new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(traffic.value)} Mbps`
       : connection.label
     return {
       ...connection,
@@ -98,10 +106,10 @@ export default function TopologyMap({
       animated: true,
       deletable: editable,
       selected: selectedEdgeIds.includes(connection.id),
-      style: { stroke: edgeColor, strokeWidth: 2, strokeDasharray: '7 5' },
-      markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
+      style: { stroke: health?.color || edgeColor, strokeWidth: 2, strokeDasharray: '7 5' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: health?.color || edgeColor },
     }
-  }), [connectionTraffic, connections, editable, selectedEdgeIds])
+  }), [connectionTraffic, connections, editable, nodes, selectedEdgeIds])
 
   const fitViewIfNodesAreOutsideMap = useCallback(() => {
     const mapElement = mapRef.current
@@ -124,6 +132,24 @@ export default function TopologyMap({
   }, [])
 
   const handleNodesChange = useCallback((changes) => {
+    const dimensionChanges = changes.filter((change) => change.type === 'dimensions')
+    if (dimensionChanges.length) {
+      const changedNodes = applyNodeChanges(dimensionChanges, nodes)
+      setNodeDimensions((current) => {
+        const next = { ...current }
+        for (const change of dimensionChanges) {
+          const node = changedNodes.find((item) => item.id === change.id)
+          if (node) {
+            next[node.id] = {
+              measured: node.measured,
+              ...(node.width !== undefined ? { width: node.width } : {}),
+              ...(node.height !== undefined ? { height: node.height } : {}),
+            }
+          }
+        }
+        return next
+      })
+    }
     const positionChanges = changes.filter((change) => change.type === 'position' && change.position)
     if (positionChanges.length) {
       const positionsById = new Map(initialNodes.map((node) => [node.id, node.position]))
@@ -147,7 +173,7 @@ export default function TopologyMap({
         return [...selected]
       })
     }
-  }, [initialNodes])
+  }, [initialNodes, nodes])
 
   const handleNodeDragStop = useCallback((_event, node) => {
     onNodeMove(node.id, node.position)
@@ -220,8 +246,6 @@ export default function TopologyMap({
         onPaneClick={() => setSelectedEdgeIds([])}
         nodesDraggable={editable}
         nodesConnectable={editable}
-        nodesDeletable={false}
-        edgesDeletable={editable}
         elementsSelectable={editable}
         deleteKeyCode={editable ? ['Backspace', 'Delete'] : null}
         defaultEdgeOptions={defaultEdgeOptions}
@@ -242,7 +266,9 @@ export default function TopologyMap({
         <MiniMap
           className="topology-minimap"
           nodeColor={(node) => node.data?.isHost ? '#80dc63' : '#58baff'}
-          maskColor="rgba(4, 10, 18, .72)"
+          nodeStrokeColor={(node) => node.data?.isHost ? '#c2ff76' : '#a6e5ff'}
+          nodeStrokeWidth={2}
+          maskColor="rgba(4, 10, 18, .35)"
           pannable
           zoomable
         />

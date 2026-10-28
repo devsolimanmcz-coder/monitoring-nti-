@@ -11,7 +11,12 @@ import {
 import { Line } from 'react-chartjs-2'
 import { capacityInDisplayUnit } from './capacity-format.js'
 import { normalizeApiError, parseApiResponse } from './api-response.js'
-import { connectionTrafficMbps, getConnectionTrafficItems, isSupportedTrafficUnit } from './connection-traffic.js'
+import {
+  connectionTrafficMbps,
+  getConnectionTrafficItems,
+  getTrafficDirection,
+  isSupportedTrafficUnit,
+} from './connection-traffic.js'
 import { formatMetricSeriesGroups } from './metric-format.js'
 import { getAvailabilityStatus } from './widget-status.js'
 import './App.css'
@@ -707,6 +712,7 @@ function MetricWidget({ widget, data, upsDevices = [] }) {
 
 function ConnectionTrafficDialog({ connection, onClose, onSave }) {
   const existingItem = connection.trafficItem || null
+  const [healthyColor, setHealthyColor] = useState(connection.healthyColor || 'green')
   const [hosts, setHosts] = useState([])
   const [catalog, setCatalog] = useState([])
   const [hostId, setHostId] = useState(existingItem ? String(existingItem.hostId) : '')
@@ -722,6 +728,9 @@ function ConnectionTrafficDialog({ connection, onClose, onSave }) {
     ...catalog,
   ].map((item) => [Number(item.itemId), item])).values()]
   const trafficItems = availableItems.filter((item) => isSupportedTrafficUnit(item.unit))
+  const receivedItems = trafficItems.filter((item) => getTrafficDirection(item.key) === 'RECEBIDO')
+  const sentItems = trafficItems.filter((item) => getTrafficDirection(item.key) === 'ENVIADO')
+  const otherTrafficItems = trafficItems.filter((item) => !getTrafficDirection(item.key))
   const selectedItem = trafficItems.find((item) => String(item.itemId) === itemId)
 
   useEffect(() => {
@@ -781,12 +790,15 @@ function ConnectionTrafficDialog({ connection, onClose, onSave }) {
       return
     }
     onSave({
-      itemId: Number(selectedItem.itemId),
-      hostId: Number(selectedItem.hostId),
-      hostName: selectedItem.hostName,
-      itemName: selectedItem.itemName,
-      key: selectedItem.key,
-      unit: selectedItem.unit,
+      trafficItem: {
+        itemId: Number(selectedItem.itemId),
+        hostId: Number(selectedItem.hostId),
+        hostName: selectedItem.hostName,
+        itemName: selectedItem.itemName,
+        key: selectedItem.key,
+        unit: selectedItem.unit,
+      },
+      healthyColor,
     })
   }
 
@@ -795,17 +807,19 @@ function ConnectionTrafficDialog({ connection, onClose, onSave }) {
       <form className="section-dialog widget-dialog connection-traffic-dialog" role="dialog" aria-modal="true" aria-labelledby="connection-traffic-title" onSubmit={submit}>
         <div className="dialog-heading"><div><span className="eyebrow">TRÁFEGO AO VIVO · ZABBIX</span><h2 id="connection-traffic-title">Configurar Mbps do enlace</h2></div><button className="dialog-close" type="button" aria-label="Fechar" onClick={onClose}><Icon name="close" size={17} /></button></div>
         <p className="dialog-hint">Escolha o item da interface que mede entrada ou saída. Taxas em bytes/s e bits/s são convertidas para Mbps; contadores de bytes usam a variação entre as coletas.</p>
+        <label className="dialog-field"><span>Cor quando os dois equipamentos estiverem UP</span><select value={healthyColor} onChange={(event) => setHealthyColor(event.target.value)}><option value="green">Verde</option><option value="blue">Azul</option></select></label>
+        <p className="dialog-hint">O enlace fica vermelho se um ping estiver DOWN, amarelo se estiver instável e cinza sem histórico de ping.</p>
         <label className="dialog-field"><span>Equipamento da interface</span><select autoFocus value={hostId} onChange={(event) => { setHostId(event.target.value); setItemId(''); setSearch('net.if'); setCatalog([]); setPage(0); setLoadingItems(false) }} required><option value="">{loadingHosts ? 'Carregando equipamentos...' : 'Selecione um equipamento...'}</option>{hosts.map((host) => <option key={host.hostId} value={host.hostId}>{host.hostName}</option>)}</select></label>
         {hostId && <>
           <label className="dialog-field"><span>Buscar item da interface</span><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); setCatalog([]) }} placeholder="net.if.in, tráfego recebido..." /></label>
-          <label className="dialog-field"><span>Métrica de tráfego</span><select value={itemId} onChange={(event) => setItemId(event.target.value)} required><option value="">{loadingItems ? 'Carregando métricas...' : 'Selecione uma métrica de tráfego...'}</option>{trafficItems.map((item) => <option key={item.itemId} value={item.itemId}>{item.itemName} · {item.unit} · {item.key}</option>)}</select></label>
+          <label className="dialog-field"><span>Métrica de tráfego</span><select value={itemId} onChange={(event) => setItemId(event.target.value)} required><option value="">{loadingItems ? 'Carregando métricas...' : 'Selecione uma métrica de tráfego...'}</option>{receivedItems.length > 0 && <optgroup label="Recebido · entrada">{receivedItems.map((item) => <option key={item.itemId} value={item.itemId}>{item.itemName} · {item.unit} · {item.key}</option>)}</optgroup>}{sentItems.length > 0 && <optgroup label="Enviado · saída">{sentItems.map((item) => <option key={item.itemId} value={item.itemId}>{item.itemName} · {item.unit} · {item.key}</option>)}</optgroup>}{otherTrafficItems.length > 0 && <optgroup label="Outras métricas de tráfego">{otherTrafficItems.map((item) => <option key={item.itemId} value={item.itemId}>{item.itemName} · {item.unit} · {item.key}</option>)}</optgroup>}</select></label>
           {loadingItems && <span className="dialog-hint">Consultando itens numéricos do Zabbix...</span>}
           {!loadingItems && trafficItems.length === 0 && <span className="dialog-hint">Nenhum item com unidade de taxa ou contador de bytes nesta página. Pesquise por net.if.in, net.if.out ou o nome da interface.</span>}
           {hasMore && <button className="edit-panel-button" type="button" disabled={loadingItems} onClick={() => setPage((current) => current + 1)}>Carregar mais itens</button>}
         </>}
         {error && <p className="dialog-error" role="alert">{error}</p>}
         <div className="dialog-actions">
-          {existingItem && <button className="dialog-cancel connection-traffic-remove" type="button" onClick={() => onSave(null)}>Remover medição</button>}
+          {existingItem && <button className="dialog-cancel connection-traffic-remove" type="button" onClick={() => onSave({ trafficItem: null, healthyColor })}>Remover medição</button>}
           <button className="dialog-cancel" type="button" onClick={onClose}>Cancelar</button>
           <button className="dialog-submit" type="submit" disabled={!selectedItem || loadingItems}>Salvar</button>
         </div>
@@ -1434,6 +1448,7 @@ function App() {
       return [connection.id, {
         value: connectionTrafficMbps(history?.points, history?.item?.unit || trafficItem.unit),
         title: `${trafficItem.hostName} · ${trafficItem.itemName}`,
+        direction: getTrafficDirection(trafficItem.key),
       }]
     })), [layout.connections, widgetHistories])
 
@@ -2544,6 +2559,9 @@ function App() {
               data: {
                 editable: canEditDashboard && editMode,
                 isHost: widget.type === 'availability',
+                availability: widget.type === 'availability'
+                  ? getAvailabilityStatus(widgetHistories[`${widget.range || '1h'}:${(widget.itemIds || [widget.itemId])[0]}`]?.history?.points)
+                  : null,
                 widget,
                 content: renderDashboardWidget(widget, index, true),
               },
@@ -3097,13 +3115,15 @@ function App() {
       {connectionDialog && <ConnectionTrafficDialog
         connection={connectionDialog}
         onClose={() => setConnectionDialog(null)}
-        onSave={(trafficItem) => {
+        onSave={({ trafficItem, healthyColor }) => {
           setLayout((current) => ({
             ...current,
             connections: current.connections.map((connection) => {
               if (connection.id !== connectionDialog.id) return connection
-              if (trafficItem) return { ...connection, trafficItem }
-              return Object.fromEntries(Object.entries(connection).filter(([key]) => key !== 'trafficItem'))
+              const next = { ...connection, healthyColor }
+              if (trafficItem) next.trafficItem = trafficItem
+              else delete next.trafficItem
+              return next
             }),
           }))
           setConnectionDialog(null)

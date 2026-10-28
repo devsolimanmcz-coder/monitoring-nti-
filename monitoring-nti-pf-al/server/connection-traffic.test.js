@@ -1,6 +1,25 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { connectionTrafficMbps, getConnectionTrafficItems, isSupportedTrafficUnit } from '../src/connection-traffic.js'
+import {
+  connectionTrafficMbps,
+  getConnectionHealth,
+  getConnectionTrafficItems,
+  getTrafficDirection,
+  isSupportedTrafficUnit,
+} from '../src/connection-traffic.js'
+
+test('sets link health color from ping states and supports healthy color options', () => {
+  assert.deepEqual(getConnectionHealth('down', 'up', 'blue'), { state: 'down', color: '#ff594f' })
+  assert.deepEqual(getConnectionHealth('up', 'up'), { state: 'up', color: '#47d7a0' })
+  assert.deepEqual(getConnectionHealth('up', 'up', 'blue'), { state: 'up', color: '#38bdf8' })
+  assert.deepEqual(getConnectionHealth('up', 'unknown'), { state: 'unknown', color: '#8492a6' })
+})
+
+test('identifies inbound and outbound interface metrics', () => {
+  assert.equal(getTrafficDirection('net.if.in[eth0]'), 'RECEBIDO')
+  assert.equal(getTrafficDirection('net.if.out[eth0]'), 'ENVIADO')
+  assert.equal(getTrafficDirection('system.cpu.util'), '')
+})
 
 test('includes traffic configured on organization topology sections', () => {
   const connections = [

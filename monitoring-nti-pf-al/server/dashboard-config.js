@@ -285,11 +285,17 @@ function normalizeDashboard(dashboard) {
     const id = typeof connection?.id === 'string' ? connection.id.trim() : ''
     const source = typeof connection?.source === 'string' ? connection.source : ''
     const target = typeof connection?.target === 'string' ? connection.target : ''
+    const sourceHandle = connection?.sourceHandle ?? 'source-right'
+    const targetHandle = connection?.targetHandle ?? 'target-left'
+    const healthyColor = connection?.healthyColor ?? 'green'
     if (!/^[a-zA-Z0-9_-]{1,160}$/.test(id)
       || connectionIds.has(id)
       || !widgetIds.has(source)
       || !widgetIds.has(target)
-      || source === target) {
+      || source === target
+      || (sourceHandle !== undefined && !['source-top', 'source-right', 'source-bottom', 'source-left'].includes(sourceHandle))
+      || (targetHandle !== undefined && !['target-top', 'target-right', 'target-bottom', 'target-left'].includes(targetHandle))
+      || !['green', 'blue'].includes(healthyColor)) {
       throw new Error('Conexão inválida no mapa. Verifique os indicadores de origem e destino.')
     }
     const sourceArea = topologyAreaForWidget(widgetById.get(source))
@@ -328,6 +334,9 @@ function normalizeDashboard(dashboard) {
       id,
       source,
       target,
+      sourceHandle,
+      targetHandle,
+      healthyColor,
       ...(label ? { label } : {}),
       ...(trafficItem ? { trafficItem } : {}),
     }

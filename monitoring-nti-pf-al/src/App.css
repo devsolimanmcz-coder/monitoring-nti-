@@ -565,6 +565,7 @@
 .topology-flow-handle { width: 10px; height: 10px; background: #49d9ff; border: 2px solid #082234; box-shadow: 0 0 10px rgba(56,214,255,.72); opacity: 0; transition: opacity .12s, transform .12s; }
 .topology-flow-node:hover .topology-flow-handle,.topology-flow-node.selected .topology-flow-handle { opacity: 1; }
 .topology-flow-handle:hover { transform: scale(1.35); }
+.topology-flow-node-readonly .topology-flow-handle { opacity: 0 !important; pointer-events: none; }
 .topology-flow-node .widget-controls { z-index: 4; }
 .topology-flow-node .widget-resize-handle { z-index: 4; }
 .section-camera-grid { margin-top: 15px; }
