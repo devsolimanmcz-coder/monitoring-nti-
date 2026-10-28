@@ -19,6 +19,7 @@ import {
   isSupportedTrafficUnit,
 } from './connection-traffic.js'
 import { formatMetricSeriesGroups } from './metric-format.js'
+import { resolveLayoutMapPositions, resolveMapPositions } from './topology-layout.js'
 import { getAvailabilityStatus } from './widget-status.js'
 import './App.css'
 
@@ -90,53 +91,6 @@ function ConfirmDialog({ title, message, confirmLabel = 'Excluir', onCancel, onC
       </section>
     </div>
   )
-}
-
-function getMapWidgetSize(widget) {
-  if (widget.type === 'availability') {
-    const size = widget.mapSizePx || 80
-    return { width: size, height: size }
-  }
-  return {
-    width: (widget.mapCols || 4) * 92 - 12,
-    height: Math.max(widget.mapRows || 4, 4) * 92 - 12,
-  }
-}
-
-function resolveMapPositions(widgets) {
-  const placed = []
-  const hasCollision = (x, y, size, other) => {
-    const otherSize = getMapWidgetSize(other)
-    return x < other.mapX + otherSize.width
-      && x + size.width > other.mapX
-      && y < other.mapY + otherSize.height
-      && y + size.height > other.mapY
-  }
-
-  for (const widget of widgets) {
-    const size = getMapWidgetSize(widget)
-    if (Number.isSafeInteger(widget.mapX) && Number.isSafeInteger(widget.mapY)) {
-      placed.push({ ...widget, ...size })
-      continue
-    }
-    let x = 0
-    let y = 0
-    let found = false
-    while (!found) {
-      const maxColumns = Math.max(1, Math.floor((1104 - size.width) / 92) + 1)
-      for (let column = 0; column < maxColumns; column += 1) {
-        const candidateX = column * 92
-        if (!placed.some((other) => hasCollision(candidateX, y, size, other))) {
-          x = candidateX
-          found = true
-          break
-        }
-      }
-      if (!found) y += 92
-    }
-    placed.push({ ...widget, ...size, mapX: x, mapY: y })
-  }
-  return placed
 }
 
 function orderVisible(items, order = [], hidden = []) {
@@ -1413,10 +1367,9 @@ function App() {
   const [alertPeriod, setAlertPeriod] = useState('all')
   const [kioskMode, setKioskMode] = useState(false)
   const [kioskPaused, setKioskPaused] = useState(false)
-  const [kioskGridSize, setKioskGridSize] = useState(4)
-  const [kioskGridPages, setKioskGridPages] = useState({})
   const [floatingCamera, setFloatingCamera] = useState(null)
   const [floatingCameraPosition, setFloatingCameraPosition] = useState({ x: 24, y: 90 })
+  const [floatingCameraWidth, setFloatingCameraWidth] = useState(640)
   const [configError, setConfigError] = useState('')
   const [sectionDialog, setSectionDialog] = useState(null)
   const [confirmation, setConfirmation] = useState(null)
@@ -1722,7 +1675,7 @@ function App() {
         lastPersistedConfig.current = loadedConfig
         setConfig(loadedConfig)
         setConfigOwnerId(authUser.id)
-        setLayout(active)
+        setLayout({ ...active, widgets: resolveLayoutMapPositions(active) })
         setConfigError('')
         setLayoutLoaded(true)
         if (window.location.hash.startsWith('#/')) setPage(window.location.hash.slice(2).split('/')[0])
@@ -1860,7 +1813,7 @@ function App() {
       if (dashboardId && config) {
         const selected = config.dashboards.find((item) => item.id === dashboardId)
         if (selected) {
-          setLayout(selected)
+          setLayout({ ...selected, widgets: resolveLayoutMapPositions(selected) })
           setConfig((current) => ({ ...current, activeDashboardId: selected.id }))
         } else if (authUser.role === 'view') {
           window.location.hash = authUser.dashboardIds[0]
@@ -1929,15 +1882,6 @@ function App() {
     }
     document.addEventListener('fullscreenchange', handleFullscreen)
     return () => document.removeEventListener('fullscreenchange', handleFullscreen)
-  }, [])
-
-  useEffect(() => {
-    const updateGridSize = () => {
-      setKioskGridSize(window.innerWidth >= 1600 ? 5 : window.innerWidth >= 1100 ? 4 : 3)
-    }
-    updateGridSize()
-    window.addEventListener('resize', updateGridSize)
-    return () => window.removeEventListener('resize', updateGridSize)
   }, [])
 
   useEffect(() => {
@@ -2276,12 +2220,13 @@ function App() {
   }
 
   const saveWidget = (widget) => {
-    setLayout((current) => ({
-      ...current,
-      widgets: current.widgets.some((item) => item.id === widget.id)
+    setLayout((current) => {
+      const widgets = current.widgets.some((item) => item.id === widget.id)
         ? current.widgets.map((item) => item.id === widget.id ? widget : item)
-        : [...current.widgets, widget],
-    }))
+        : [...current.widgets, widget]
+      const next = { ...current, widgets }
+      return { ...next, widgets: resolveLayoutMapPositions(next) }
+    })
     setWidgetDialog(null)
   }
 
@@ -2468,14 +2413,27 @@ function App() {
   function openCameraWidget(widget) {
     const width = Math.min(640, window.innerWidth - 24)
     setFloatingCamera(widget)
+    setFloatingCameraWidth(width)
     setFloatingCameraPosition({
       x: Math.max(12, window.innerWidth - width - 24),
       y: 82,
     })
   }
 
+  function resizeFloatingCamera(direction) {
+    const minWidth = Math.min(360, window.innerWidth - 24)
+    const maxWidth = Math.min(1200, window.innerWidth - 24)
+    const nextWidth = Math.max(minWidth, Math.min(maxWidth, floatingCameraWidth + direction * 160))
+    const nextHeight = Math.min(window.innerHeight - 24, nextWidth * 9 / 16 + 76)
+    setFloatingCameraWidth(nextWidth)
+    setFloatingCameraPosition((position) => ({
+      x: Math.max(12, Math.min(window.innerWidth - nextWidth - 12, position.x)),
+      y: Math.max(12, Math.min(window.innerHeight - nextHeight - 12, position.y)),
+    }))
+  }
+
   function startCameraWindowDrag(event) {
-    if (event.button !== 0 || event.target.closest('button')) return
+    if (event.button !== 0 || event.target.closest('button, input')) return
     const bounds = floatingCameraRef.current?.getBoundingClientRect()
     if (!bounds) return
     cameraDragOffset.current = { x: event.clientX - bounds.left, y: event.clientY - bounds.top }
@@ -3012,16 +2970,6 @@ function App() {
               ? orderVisible(dashboard.servers, activeLayout.orderServers, activeLayout.hiddenServers)
                 .filter((server) => server.host_name.toLowerCase().includes(search.toLowerCase()))
               : cardsForSection(section)
-            const useKioskSquareGrid = kioskMode && !isConsumptionSection && !isUpsSection && !isTopologySection
-            const kioskPageCapacity = kioskGridSize ** 2
-            const kioskPageCount = Math.max(1, Math.ceil(sectionCards.length / kioskPageCapacity))
-            const kioskPage = Math.min(kioskGridPages[section.id] || 0, kioskPageCount - 1)
-            const displayedSectionCards = useKioskSquareGrid
-              ? sectionCards.slice(kioskPage * kioskPageCapacity, (kioskPage + 1) * kioskPageCapacity)
-              : sectionCards
-            const kioskPlaceholderCount = useKioskSquareGrid && sectionCards.length
-              ? kioskPageCapacity - displayedSectionCards.length
-              : 0
             const isIcmp = section.kind === 'icmp'
             const isVirtualServerSection = section.id === '__all_servers__'
             const sectionIcon = isTopologySection ? 'network' : isConsumptionSection ? 'activity' : isUpsSection ? 'battery' : isIcmp ? 'network' : 'server'
@@ -3048,11 +2996,6 @@ function App() {
                   </div>
                   <div className="section-actions">
                     <span className="section-counter">{isConsumptionSection || isTopologySection ? sectionWidgets.length : sectionCards.length} {sectionCountLabel}{!isConsumptionSection && !isTopologySection && sectionWidgets.length ? ` · ${sectionWidgets.length} câmera(s)` : ''}</span>
-                    {useKioskSquareGrid && kioskPageCount > 1 && <div className="kiosk-grid-pager" aria-label={`Página de cards, grade ${kioskGridSize} por ${kioskGridSize}`}>
-                      <button type="button" aria-label="Página anterior de cards" onClick={() => setKioskGridPages((pages) => ({ ...pages, [section.id]: Math.max(0, kioskPage - 1) }))} disabled={kioskPage === 0}><Icon name="chevron" size={14} className="chevron-left" /></button>
-                      <span>{kioskPage + 1}/{kioskPageCount} · {kioskGridSize}×{kioskGridSize}</span>
-                      <button type="button" aria-label="Próxima página de cards" onClick={() => setKioskGridPages((pages) => ({ ...pages, [section.id]: Math.min(kioskPageCount - 1, kioskPage + 1) }))} disabled={kioskPage >= kioskPageCount - 1}><Icon name="chevron" size={14} /></button>
-                    </div>}
                     {editMode && canEditDashboard && <button className="edit-panel-button consumption-add-button" type="button" onClick={() => setWidgetDialog({ sectionId: section.id, sectionKind: section.kind })}><Icon name="plus" size={14} />{isConsumptionSection ? 'Adicionar indicador' : isTopologySection ? 'Adicionar equipamento' : 'Adicionar câmera'}</button>}
                     {editMode && isAdministrator && !isVirtualServerSection && !isUpsSection && <>
                       <button className="section-action" type="button" aria-label={`Renomear ${section.title}`} onClick={() => setSectionDialog({ mode: 'rename', id: section.id, title: section.title, kind: section.kind })}><Icon name="edit" size={13} /></button>
@@ -3108,17 +3051,15 @@ function App() {
                   )
                 ) : sectionCards.length ? (
                   <div
-                    className={`${isIcmp ? 'icmp-grid' : 'server-grid'} ${editMode ? 'grid-editing' : ''}${useKioskSquareGrid ? ' kiosk-square-grid' : ''}`}
-                    style={useKioskSquareGrid ? { '--kiosk-grid-size': kioskGridSize } : undefined}
+                    className={`${isIcmp ? 'icmp-grid' : 'server-grid'} ${editMode ? 'grid-editing' : ''}`}
                     onDragOver={(event) => { if (editMode) event.preventDefault() }}
                     onDrop={(event) => handleDrop(event, section, null)}
                   >
-                    {displayedSectionCards.map((item) => (
+                    {sectionCards.map((item) => (
                       isIcmp
                         ? <IcmpCard key={item.host_name} host={item} alerts={alertsByHost.get(item.host_name)} size={activeLayout.cardSizes[`icmp:${item.host_name}`]} onResize={resizeHostCardByDrag} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
                         : <ServerCard key={item.host_name} server={item} alerts={alertsByHost.get(item.host_name)} diskWarningPct={config?.alertRules.diskWarningPct ?? 80} diskCriticalPct={config?.alertRules.diskCriticalPct ?? 90} size={activeLayout.cardSizes[`servers:${item.host_name}`]} onResize={resizeHostCardByDrag} editMode={editMode} canDelete={isAdministrator} onRemove={handleRemoveCard} onDragStart={(event, _kind, name) => handleDragStart(event, section, name)} onDragOver={(event) => { if (editMode) event.preventDefault() }} onDrop={(event, _kind, name) => handleDrop(event, section, name)} />
                     ))}
-                    {Array.from({ length: kioskPlaceholderCount }, (_, index) => <div className="kiosk-grid-placeholder" key={`empty-${index}`} aria-hidden="true" />)}
                   </div>
                 ) : (
                   sectionWidgets.length ? null : <EmptyState title={cardEmptyTitle} detail={cardEmptyDetail} />
@@ -3198,12 +3139,17 @@ function App() {
         <aside
           className="floating-camera-window"
           ref={floatingCameraRef}
-          style={{ left: `${floatingCameraPosition.x}px`, top: `${floatingCameraPosition.y}px` }}
+          style={{ left: `${floatingCameraPosition.x}px`, top: `${floatingCameraPosition.y}px`, width: `${floatingCameraWidth}px` }}
           aria-label={`Janela flutuante: ${floatingCamera.title}`}
         >
           <header className="floating-camera-header" onPointerDown={startCameraWindowDrag}>
             <div><span>CÂMERA AO VIVO</span><strong>{floatingCamera.title}</strong></div>
-            <button type="button" aria-label="Fechar janela da câmera" onClick={() => setFloatingCamera(null)}><Icon name="close" size={15} /></button>
+            <div className="floating-camera-controls">
+              <button type="button" aria-label="Diminuir tamanho da câmera" title="Diminuir tamanho" disabled={floatingCameraWidth <= Math.min(360, window.innerWidth - 24)} onClick={() => resizeFloatingCamera(-1)}>−</button>
+              <span>{floatingCameraWidth}px</span>
+              <button type="button" aria-label="Aumentar tamanho da câmera" title="Aumentar tamanho" disabled={floatingCameraWidth >= Math.min(1200, window.innerWidth - 24)} onClick={() => resizeFloatingCamera(1)}>+</button>
+              <button type="button" aria-label="Fechar janela da câmera" title="Fechar" onClick={() => setFloatingCamera(null)}><Icon name="close" size={15} /></button>
+            </div>
           </header>
           <FloatingCameraStream widget={floatingCamera} />
         </aside>,
