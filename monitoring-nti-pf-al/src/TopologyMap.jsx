@@ -15,8 +15,10 @@ import {
   Panel,
   Position,
   ReactFlow,
+  useStore,
 } from '@xyflow/react'
 import { getConnectionHealth } from './connection-traffic.js'
+import { getSnappedNodePosition } from './topology-alignment.js'
 import '@xyflow/react/dist/style.css'
 
 const edgeColor = '#38d6ff'
@@ -80,6 +82,19 @@ function TopologyTrafficEdge({
 
 const edgeTypes = { topologyTraffic: TopologyTrafficEdge }
 
+function AlignmentGuides({ guides }) {
+  const [x, y, zoom] = useStore((state) => state.transform)
+
+  if (guides.x === null && guides.y === null) return null
+
+  return (
+    <svg className="topology-alignment-guides" aria-hidden="true">
+      {guides.x !== null && <line x1={x + guides.x * zoom} x2={x + guides.x * zoom} y1="0" y2="100%" />}
+      {guides.y !== null && <line x1="0" x2="100%" y1={y + guides.y * zoom} y2={y + guides.y * zoom} />}
+    </svg>
+  )
+}
+
 function persistableEdges(edges) {
   return edges.map(({ id, source, target, sourceHandle, targetHandle, label, trafficItem, trafficItems, healthyColor, edgeStyle }) => ({
     id,
@@ -101,6 +116,8 @@ export default function TopologyMap({
   connectionTraffic = {},
   editable,
   height,
+  kioskMode = false,
+  kioskMapHeight = 65,
   onNodeMove,
   onConfigureNode,
   onConnectionsChange,
@@ -110,6 +127,7 @@ export default function TopologyMap({
   const [selectedEdgeIds, setSelectedEdgeIds] = useState([])
   const [positionOverrides, setPositionOverrides] = useState({})
   const [nodeDimensions, setNodeDimensions] = useState({})
+  const [alignmentGuides, setAlignmentGuides] = useState({ x: null, y: null })
   const nodes = useMemo(() => initialNodes.map((node) => {
     const override = positionOverrides[node.id]
     const canKeepLocalPosition = override
@@ -183,14 +201,23 @@ export default function TopologyMap({
     const positionChanges = changes.filter((change) => change.type === 'position' && change.position)
     if (positionChanges.length) {
       const positionsById = new Map(initialNodes.map((node) => [node.id, node.position]))
+      const activeChange = positionChanges.find((change) => change.dragging)
+      const activeNode = activeChange && nodes.find((node) => node.id === activeChange.id)
+      const alignment = activeNode
+        ? getSnappedNodePosition(activeNode, activeChange.position, nodes)
+        : null
       setPositionOverrides((current) => {
         const next = { ...current }
         for (const change of positionChanges) {
           const base = positionsById.get(change.id)
-          if (base) next[change.id] = { base, position: change.position }
+          if (base) next[change.id] = {
+            base,
+            position: change.id === activeNode?.id && alignment ? alignment.position : change.position,
+          }
         }
         return next
       })
+      if (activeNode && alignment) setAlignmentGuides(alignment.guides)
     }
     const selectionChanges = changes.filter((change) => change.type === 'select')
     if (selectionChanges.length) {
@@ -206,8 +233,17 @@ export default function TopologyMap({
   }, [initialNodes, nodes])
 
   const handleNodeDragStop = useCallback((_event, node) => {
-    onNodeMove(node.id, node.position)
-  }, [onNodeMove])
+    const { position } = getSnappedNodePosition(node, node.position, nodes)
+    setPositionOverrides((current) => ({
+      ...current,
+      [node.id]: {
+        base: initialNodes.find((item) => item.id === node.id)?.position || position,
+        position,
+      },
+    }))
+    onNodeMove(node.id, position)
+    setAlignmentGuides({ x: null, y: null })
+  }, [initialNodes, nodes, onNodeMove])
 
   const handleEdgesChange = useCallback((changes) => {
     const selectionChanges = changes.filter((change) => change.type === 'select')
@@ -248,13 +284,21 @@ export default function TopologyMap({
   }), [editable])
 
   return (
-    <section className="topology-map" style={{ height }} aria-label="Mapa interativo de topologia de rede">
+    <section
+      className={`topology-map${kioskMode ? ' topology-map-kiosk' : ''}`}
+      style={kioskMode ? { height: `${kioskMapHeight}vh`, minHeight: 320 } : { height }}
+      aria-label="Mapa interativo de topologia de rede"
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={handleNodesChange}
+        onNodeDrag={(_event, node) => {
+          const { guides } = getSnappedNodePosition(node, node.position, nodes)
+          setAlignmentGuides(guides)
+        }}
         onNodeDragStop={handleNodeDragStop}
         onNodeClick={(event, node) => {
           if (!editable || !node.data.widget) return
@@ -277,6 +321,7 @@ export default function TopologyMap({
         panOnDrag
         zoomOnScroll
       >
+        <AlignmentGuides guides={alignmentGuides} />
         {editable && selectedEdge && <Panel position="top-right" className="topology-connection-toolbar nodrag nopan">
           <span>{Object.values(connectionTraffic[selectedEdge.id] || {}).map((item) => item.title).filter(Boolean).join(' | ') || 'Ligação selecionada'}</span>
           <button type="button" className="edit-panel-button" onClick={() => onConfigureConnection(selectedEdge)}>

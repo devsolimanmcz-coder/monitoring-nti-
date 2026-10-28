@@ -1367,6 +1367,7 @@ function App() {
   const [alertPeriod, setAlertPeriod] = useState('all')
   const [kioskMode, setKioskMode] = useState(false)
   const [kioskPaused, setKioskPaused] = useState(false)
+  const [kioskMapHeight, setKioskMapHeight] = useState(65)
   const [floatingCamera, setFloatingCamera] = useState(null)
   const [floatingCameraPosition, setFloatingCameraPosition] = useState({ x: 24, y: 90 })
   const [floatingCameraWidth, setFloatingCameraWidth] = useState(640)
@@ -2613,6 +2614,8 @@ function App() {
             connectionTraffic={connectionTraffic}
             editable={canEditDashboard && editMode}
             height={`${height}px`}
+            kioskMode={kioskMode}
+            kioskMapHeight={kioskMapHeight}
             onNodeMove={(id, position) => setLayout((current) => ({
               ...current,
               widgets: current.widgets.map((widget) => widget.id === id
@@ -2996,6 +2999,11 @@ function App() {
                   </div>
                   <div className="section-actions">
                     <span className="section-counter">{isConsumptionSection || isTopologySection ? sectionWidgets.length : sectionCards.length} {sectionCountLabel}{!isConsumptionSection && !isTopologySection && sectionWidgets.length ? ` · ${sectionWidgets.length} câmera(s)` : ''}</span>
+                    {kioskMode && isTopologySection && <div className="kiosk-map-size-control" role="group" aria-label="Altura do mapa na tela">
+                      <span>MAPA {kioskMapHeight}%</span>
+                      <button type="button" aria-label="Diminuir altura do mapa" title="Diminuir altura" onClick={() => setKioskMapHeight((height) => Math.max(35, height - 10))} disabled={kioskMapHeight <= 35}>−</button>
+                      <button type="button" aria-label="Aumentar altura do mapa" title="Aumentar altura" onClick={() => setKioskMapHeight((height) => Math.min(90, height + 10))} disabled={kioskMapHeight >= 90}>+</button>
+                    </div>}
                     {editMode && canEditDashboard && <button className="edit-panel-button consumption-add-button" type="button" onClick={() => setWidgetDialog({ sectionId: section.id, sectionKind: section.kind })}><Icon name="plus" size={14} />{isConsumptionSection ? 'Adicionar indicador' : isTopologySection ? 'Adicionar equipamento' : 'Adicionar câmera'}</button>}
                     {editMode && isAdministrator && !isVirtualServerSection && !isUpsSection && <>
                       <button className="section-action" type="button" aria-label={`Renomear ${section.title}`} onClick={() => setSectionDialog({ mode: 'rename', id: section.id, title: section.title, kind: section.kind })}><Icon name="edit" size={13} /></button>
