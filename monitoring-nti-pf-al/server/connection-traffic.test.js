@@ -1,6 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { connectionTrafficMbps, isSupportedTrafficUnit } from '../src/connection-traffic.js'
+import { connectionTrafficMbps, getConnectionTrafficItems, isSupportedTrafficUnit } from '../src/connection-traffic.js'
+
+test('includes traffic configured on organization topology sections', () => {
+  const connections = [
+    { id: 'section-map-link', trafficItem: { itemId: 123 } },
+    { id: 'unconfigured-link' },
+  ]
+
+  assert.deepEqual(getConnectionTrafficItems(connections), [connections[0]])
+})
 
 test('converts bit and byte rates to Mbps', () => {
   const points = [{ time: '2026-10-27T13:00:00.000Z', value: 12_500_000 }]

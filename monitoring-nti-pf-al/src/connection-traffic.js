@@ -2,6 +2,11 @@ const bitRateUnits = new Set(['bps', 'bit/s', 'bits/s'])
 const byteRateUnits = new Set(['Bps', 'B/s', 'byte/s', 'bytes/s'])
 const byteCounterUnits = new Set(['B', 'byte', 'bytes'])
 
+export function getConnectionTrafficItems(connections) {
+  return (Array.isArray(connections) ? connections : [])
+    .filter((connection) => connection.trafficItem?.itemId)
+}
+
 export function isSupportedTrafficUnit(unit) {
   const compactUnit = typeof unit === 'string' ? unit.trim().replace(/\s+/g, '') : ''
   return bitRateUnits.has(compactUnit) || byteRateUnits.has(compactUnit) || byteCounterUnits.has(compactUnit)

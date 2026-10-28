@@ -11,7 +11,7 @@ import {
 import { Line } from 'react-chartjs-2'
 import { capacityInDisplayUnit } from './capacity-format.js'
 import { normalizeApiError, parseApiResponse } from './api-response.js'
-import { connectionTrafficMbps, isSupportedTrafficUnit } from './connection-traffic.js'
+import { connectionTrafficMbps, getConnectionTrafficItems, isSupportedTrafficUnit } from './connection-traffic.js'
 import { formatMetricSeriesGroups } from './metric-format.js'
 import { getAvailabilityStatus } from './widget-status.js'
 import './App.css'
@@ -1407,9 +1407,7 @@ function App() {
   const widgetItemIdsKey = useMemo(
     () => {
       const metricWidgets = layout.widgets.filter((widget) => !['camera', 'ups'].includes(widget.type))
-      const trafficConnections = layout.type === 'topology'
-        ? layout.connections.filter((connection) => connection.trafficItem?.itemId)
-        : []
+      const trafficConnections = getConnectionTrafficItems(layout.connections)
       const ranges = [...new Set([
         ...metricWidgets.map((widget) => widget.range || '1h'),
         ...(trafficConnections.length ? ['15m'] : []),
@@ -1426,7 +1424,7 @@ function App() {
         ])].sort((a, b) => a - b),
       ])))
     },
-    [layout.connections, layout.type, layout.widgets],
+    [layout.connections, layout.widgets],
   )
   const connectionTraffic = useMemo(() => Object.fromEntries(layout.connections
     .filter((connection) => connection.trafficItem)
